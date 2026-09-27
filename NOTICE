@@ -1,0 +1,29 @@
+Sentinel
+Copyright 2026 Meherzan Turel
+
+Submitted to the Gujarat Police Hackathon Innovation Challenge 2026,
+problem statement "Integrated Video Management & Analytics Platform",
+as an individual entrant.
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+Third-party components, and why these ones:
+
+  OpenCV            Apache-2.0
+  torchvision       BSD-3-Clause
+  PyTorch           BSD-3-Clause
+  NumPy             BSD-3-Clause
+  FastAPI           MIT
+  Uvicorn           BSD-3-Clause
+  Pydantic          MIT
+  cryptography      Apache-2.0 / BSD-3-Clause
+  Pillow            MIT-CMU
+  Leaflet           BSD-2-Clause
+  Tesseract OCR     Apache-2.0
+  OpenStreetMap     map data (c) contributors, ODbL
+
+Every one is permissively licensed. Ultralytics YOLO, the detector most
+commonly reached for in this field, is AGPL-3.0: in a state procurement
+that is a blocker rather than a footnote, because it reaches the whole
+deployed system. torchvision's detector was chosen for that reason and the
+choice is stated in the design document rather than left implicit.

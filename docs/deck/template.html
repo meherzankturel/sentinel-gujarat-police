@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sentinel — Solution Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ──────────────────────────────────────────────────────────────────────
+   The deck is the product's own palette, on paper.
+
+   The console is a light build because an officer reads it on a screen in
+   a room with windows. The deck used to be dark, which meant every
+   screenshot sat inside it like a photograph of something else. Light
+   throughout: the slides and the system now look like one thing, and the
+   capability ramp — teal reads plates, amber reads some, blue counts and
+   tracks — is the same vocabulary in both.
+
+   Numbers are always mono, prose is always sans. Across twelve slides
+   that is the visible difference between something measured and
+   something claimed.
+   ────────────────────────────────────────────────────────────────────── */
+:root{
+  --paper:#FBFAF7; --panel:#FFFFFF; --panel2:#F4F2ED; --line:#E4E1D9;
+  --ink:#15181D; --mist:#5C6672; --dim:#8A9098;
+  --cap-plate:#0E9E83; --cap-marginal:#B8780F; --cap-presence:#3F6E96;
+  --cap-unusable:#8A5A68; --cap-unknown:#BDB8AE; --alarm:#C62A3C;
+  --sans:"Archivo",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#EDEBE5;font-family:var(--sans);color:var(--ink);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+.slide{
+  position:relative;width:1280px;height:720px;margin:0 auto 24px;
+  background:var(--paper);overflow:hidden;
+  display:grid;grid-template-rows:auto 1fr auto;
+  padding:44px 60px 34px;
+}
+
+/* The rail. Section on the left, the threshold everything argues from on
+   the right — the same 120px on every slide, so the reader never has to
+   remember what the line means. */
+.rail{display:flex;align-items:baseline;gap:14px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dim);
+  border-bottom:1px solid var(--line);padding-bottom:11px}
+.rail .sec{color:var(--mist);font-weight:500}
+.rail .sp{flex:1}
+.rail .thr b{color:var(--cap-plate);font-weight:600}
+
+.body{padding-top:26px;min-height:0;display:flex;flex-direction:column;
+  overflow:hidden}
+.foot{display:flex;align-items:baseline;gap:12px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim);
+  border-top:1px solid var(--line);padding-top:10px}
+.foot .sp{flex:1}
+
+h1{font-size:62px;line-height:1.0;font-weight:800;letter-spacing:-.035em}
+h2{font-size:36px;line-height:1.1;font-weight:700;letter-spacing:-.022em;
+  max-width:21ch}
+h2.wide{max-width:30ch}
+h2 em{font-style:normal;color:var(--cap-plate)}
+.lede{margin-top:16px;font-size:17px;line-height:1.5;color:var(--mist);
+  max-width:64ch;font-weight:400}
+.lede strong{color:var(--ink);font-weight:600}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ── stat tiles ─────────────────────────────────────────────────────── */
+.stats{display:grid;grid-template-columns:repeat(var(--cols,3),1fr);
+  gap:14px;margin-top:auto}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  padding:14px 16px;min-height:0}
+.stat b{display:block;font-family:var(--mono);font-size:29px;font-weight:600;
+  letter-spacing:-.02em;line-height:1}
+.stat > span{display:block;margin-top:8px;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim)}
+.stat small{display:block;margin-top:6px;font-size:12px;line-height:1.42;
+  color:var(--mist)}
+.stat.teal b{color:var(--cap-plate)}
+.stat.amber b{color:var(--cap-marginal)}
+.stat.alarm b{color:var(--alarm)}
+
+/* ── screenshots ────────────────────────────────────────────────────── */
+.shot{background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  overflow:hidden;box-shadow:0 12px 34px rgba(21,24,29,.08)}
+.shot img{display:block;width:100%;height:100%;object-fit:cover;
+  object-position:top left}
+.shot.contain img{object-fit:contain;object-position:center}
+
+.split{display:grid;grid-template-columns:var(--split,1fr 1fr);gap:24px;
+  flex:1;min-height:0;margin-top:18px}
+.split .col{min-width:0;display:flex;flex-direction:column;gap:12px}
+
+/* ── point lists ────────────────────────────────────────────────────── */
+.points{display:flex;flex-direction:column;gap:12px;margin-top:18px}
+.point{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+.point i{width:9px;height:9px;border-radius:50%;margin-top:6px;
+  background:var(--cap-plate);flex:0 0 auto}
+.point i.amber{background:var(--cap-marginal)}
+.point i.blue{background:var(--cap-presence)}
+.point i.plum{background:var(--cap-unusable)}
+.point b{display:block;font-size:16.5px;font-weight:600;line-height:1.3}
+.point > div > span{display:block;margin-top:3px;font-size:13.5px;
+  line-height:1.5;color:var(--mist)}
+
+/* ── tables ─────────────────────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:18px}
+th{text-align:left;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--dim);font-weight:600;padding:0 12px 8px 0;
+  border-bottom:1px solid var(--line)}
+td{padding:9px 12px 9px 0;border-bottom:1px solid var(--line);
+  vertical-align:top;line-height:1.4}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+td b{font-weight:600}
+tr:last-child td{border-bottom:0}
+.muted{color:var(--mist)}
+
+/* ── the signature: every camera on the axis that decides its job ───── */
+.axiswrap{background:var(--panel);border:1px solid var(--line);
+  border-radius:3px;padding:18px 20px 12px;margin-top:18px}
+.axishead{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.axishead b{font-size:13px;font-weight:600}
+.axishead span{font-size:11.5px;color:var(--mist)}
+.legend{display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--mist)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:6px}
+
+/* ── title and closing ──────────────────────────────────────────────── */
+.slide.cover,.slide.close{grid-template-rows:auto 1fr auto;
+  background:var(--panel)}
+/* The cover carries the console itself on the right. A title slide with
+   an empty half asks to be believed; one with the working product on it
+   does not. Bled to the edge so it reads as a window into the system
+   rather than a picture pasted onto a slide. */
+.cover .split{--split:1fr 1fr;align-items:stretch}
+.cover .shot{border-radius:3px 0 0 3px;border-right:0;margin-right:-60px}
+.cover .shot img{object-position:top left}
+.cover .mark,.close .mark{font-family:var(--sans);font-weight:800;
+  font-size:15px;letter-spacing:.3em;text-transform:uppercase}
+.cover .mark span,.close .mark span{color:var(--cap-plate)}
+.cover .who{margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);
+  gap:14px;border-top:1px solid var(--line);padding-top:16px}
+.cover .who div span{display:block;font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim)}
+.cover .who div b{display:block;margin-top:6px;font-size:15px;font-weight:600}
+.cover .ps{margin-top:20px;font-size:18px;color:var(--mist);max-width:36ch;
+  line-height:1.5}
+.close .links{margin-top:26px;display:grid;grid-template-columns:1fr 1fr;
+  gap:14px;max-width:940px}
+.close .link{background:var(--paper);border:1px solid var(--line);
+  border-radius:3px;padding:15px 17px}
+.close .link > span{font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim)}
+.close .link b{display:block;margin-top:6px;font-family:var(--mono);
+  font-size:14px;font-weight:500;word-break:break-all}
+
+.tag{display:inline-block;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;
+  border-radius:2px;background:var(--panel2);color:var(--mist)}
+.tag.on{background:var(--cap-plate);color:#fff}
+
+@page{size:1280px 720px;margin:0}
+@media print{
+  body{background:none}
+  .slide{margin:0;page-break-after:always;break-after:page}
+  .slide:last-child{page-break-after:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ 1 · cover ═══════════════════════════════════════════════════ -->
+<section class="slide cover">
+  <div class="mark">Sentinel<span>.</span></div>
+  <div class="body">
+    <div class="split" style="margin-top:6px">
+      <div class="col" style="justify-content:flex-start">
+        <h1>What each<br>camera can<br>actually do.</h1>
+        <div class="ps">A camera registry that measures capability, and a
+          control plane that acts on it.</div>
+      </div>
+      <div class="shot"><img src="SHOT_GIS" alt="The camera registry on a
+        map of Gujarat, every marker coloured by what that camera was
+        measured able to resolve"></div>
+    </div>
+    <div class="who">
+      <div><span>Problem statement</span><b>Integrated Video Management
+        &amp; Analytics Platform</b></div>
+      <div><span>Submitted by</span><b>Meherzan Turel · individual
+        entrant</b></div>
+      <div><span>For</span><b>Gujarat Police Hackathon Innovation Challenge 2026</b></div>
+    </div>
+  </div>
+  <div class="foot"><span>Solution presentation</span><span class="sp"></span>
+    <span class="pg"></span></div>
+</section>
+
+<!-- ═══ 2 · what I bring ═══════════════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">The solution</span><span class="sp"></span>
+    <span class="thr">read threshold <b class="n" data-n="grid.read_threshold_px"
+      data-suffix="px"></b></span></div>
+  <div class="body">
+    <h2 class="wide">Four things, built and running on your grid today.</h2>
+    <div class="points" style="margin-top:34px;margin-bottom:auto;gap:20px">
+      <div class="point"><i></i><div>
+        <b>A registry that measures what each camera can resolve</b>
+        <span>Plate width in pixels, clock drift, delivered frame rate,
+          night usability — measured from the camera's own video, never
+          read off a datasheet. <span class="n" data-n="registry.cameras"></span>
+          cameras carry it now.</span></div></div>
+      <div class="point"><i class="amber"></i><div>
+        <b>A control plane that assigns analytics by capability</b>
+        <span>Plate reading is scheduled only where a plate is legible.
+          On this grid that is <span class="n" data-n="grid.plate_capable"></span>
+          government cameras in <span class="n" data-n="grid.surveyed"></span>.
+          The rest do cheap presence work and corroborate.</span></div></div>
+      <div class="point"><i class="blue"></i><div>
+        <b>An officer's console that shows its working</b>
+        <span>Search a registration, get a route with a confidence and a
+          reason for every sighting, the vehicle and the plate crop the
+          reader worked from, and a court-ready bundle in one action.</span>
+        </div></div>
+      <div class="point"><i class="plum"></i><div>
+        <b>Governance enforced in code, not in a policy annex</b>
+        <span>Case-linked access refused before a row is read, a
+          tamper-evident audit chain over every query and export, and a
+          confidence tier capped by what the camera was measured able to
+          do.</span></div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Sentinel</span><span class="sp"></span>
+    <span class="pg"></span></div>
+</section>
+
+<!-- ═══ 3 · the registry ════════════════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">Model 1 · registry and GIS</span>
+    <span class="sp"></span><span class="thr">read threshold
+    <b class="n" data-n="grid.read_threshold_px" data-suffix="px"></b></span></div>
+  <div class="body">
+    <h2>A map coloured by <em>what a camera can do</em>, not by whether it
+      is switched on.</h2>
+    <div class="split" style="--split:1.35fr 1fr">
+      <div class="shot contain" style="padding:8px"><img src="SHOT_GIS"
+        alt="Camera registry on a map of Gujarat, markers coloured and sized
+        by measured plate width, with one camera's measured record open"></div>
+      <div class="col">
+        <div class="stat teal"><b class="n" data-n="registry.cameras"></b>
+          <span>cameras in the registry</span>
+          <small><span class="n" data-n="registry.government"></span>
+            government · <span class="n" data-n="registry.local_mock"></span>
+            local mock · <span class="n" data-n="registry.own_feed"></span>
+            own feed</small></div>
+        <div class="stat"><b class="n" data-n="registry.departments_all"></b>
+          <span>departments federated</span>
+          <small>One registry over equipment bought at different times by
+            different owners. No camera is replaced.</small></div>
+        <div class="stat amber"><b class="n" data-n="clocks.max_abs_drift_s"
+          data-suffix="s"></b>
+          <span>worst measured clock drift</span>
+          <small>Found on a live government camera. Timing is corrected
+            before ordering, and the correction is shown.</small></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>The control plane</span><span class="sp"></span>
+    <span class="pg"></span></div>
+</section>
+
+<!-- ═══ 4 · the measurement ═════════════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">Measured, not assumed</span>
+    <span class="sp"></span><span class="thr">read threshold
+    <b class="n" data-n="grid.read_threshold_px" data-suffix="px"></b></span></div>
+  <div class="body">
+    <h2 class="wide">Every government camera, on the one axis that decides
+      what it may be asked to do.</h2>
+    <div class="axiswrap">
+      <div class="axishead"><b>Measured plate width</b>
+        <span>p90 pixels across the number plate, from each camera's own
+          delivered video</span></div>
+      <div id="axis"></div>
+      <div class="legend">
+        <span><i style="background:var(--cap-plate)"></i>reads plates</span>
+        <span><i style="background:var(--cap-marginal)"></i>reads some</span>
+        <span><i style="background:var(--cap-presence)"></i>counts and tracks</span>
+        <span><i style="background:var(--cap-unknown)"></i>no vehicles seen</span>
+      </div>
+    </div>
+    <div class="stats" style="--cols:3">
+      <div class="stat teal"><b><span class="n" data-n="grid.plate_capable"></span>
+        of <span class="n" data-n="grid.surveyed"></span></b>
+        <span>can read a plate</span>
+        <small>One in <span class="n" data-n="grid.one_in"></span>. Scheduling
+          ANPR on the others would not fail loudly — it would invent
+          registrations.</small></div>
+      <div class="stat"><b class="n" data-n="grid.median_plate_px"
+        data-suffix="px"></b><span>median plate width</span>
+        <small>Against the ~<span class="n" data-n="grid.read_threshold_px"></span>px
+          a read needs. Resolution does not predict it: 1920×1080 yielded 22px,
+          854×480 yielded 63px.</small></div>
+      <div class="stat"><b class="n" data-n="validation.worst_err_pct"
+        data-suffix="%"></b><span>worst measurement error</span>
+        <small>The measurement itself was validated against hand-marked
+          plates on <span class="n" data-n="validation.n"></span> cameras,
+          mean <span class="n" data-n="validation.mean_err_pct"></span>%.</small></div>
+    </div>
+  </div>
+  <div class="foot"><span>Why capability decides everything</span>
+    <span class="sp"></span><span class="pg"></span></div>
+</section>
+
+<!-- ═══ 5 · the officer's console ═══════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">Working demonstration</span>
+    <span class="sp"></span><span class="thr">read threshold
+    <b class="n" data-n="grid.read_threshold_px" data-suffix="px"></b></span></div>
+  <div class="body">
+    <h2>Search a registration. Get a route you can defend.</h2>
+    <div class="split" style="--split:1.5fr 1fr">
+      <div class="shot contain" style="padding:8px"><img src="SHOT_OFFICER"
+        alt="Officer's console: a reconstructed vehicle route across six
+        cameras, each sighting carrying its confidence tier and the reason
+        for it"></div>
+      <div class="col">
+        <div class="stat"><b class="n">6 → 1</b>
+          <span>sightings, one route</span>
+          <small>Corrected time order across five departments, with the
+            distance and implied speed of every leg shown.</small></div>
+        <div class="stat alarm"><b class="n">318.9 km/h</b>
+          <span>impossible transit, flagged</span>
+          <small>Either two vehicles carry this plate or a camera clock is
+            wrong. The route is shown, <b>not corrected</b> — an officer is
+            better placed to say which.</small></div>
+        <div class="stat"><b class="n">3 tiers</b>
+          <span>never a boolean</span>
+          <small>Confirmed, probable, corroborating. A camera that cannot
+            resolve a plate can strengthen a track but can never raise an
+            alert alone.</small></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>The officer's screen</span><span class="sp"></span>
+    <span class="pg"></span></div>
+</section>
+
+<!-- ═══ 6 · evidence per sighting ═══════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">Analytics quality</span>
+    <span class="sp"></span><span class="thr">read threshold
+    <b class="n" data-n="grid.read_threshold_px" data-suffix="px"></b></span></div>
+  <div class="body">
+    <h2 class="wide">Every sighting carries the vehicle, and the pixels the
+      reader actually read.</h2>
+    <div class="split" style="--split:1fr 1.15fr">
+      <div class="col">
+        <div class="shot contain" style="flex:1"><img src="SHOT_CAR"
+          alt="The vehicle as the camera saw it, cut from the frame the read
+          came from"></div>
+        <div class="shot contain" style="height:84px"><img src="SHOT_PLATE"
+          alt="The plate crop the optical character reader worked from"></div>
+        <div class="tag">own feed · Surat · read at 1.00</div>
+      </div>
+      <div class="col">
+        <div class="points" style="margin-top:0">
+          <div class="point"><i></i><div><b>Cut from the frame the read came
+            from</b><span>Not the arrival moment. A track is read from its
+            best look, and where the read was fused across several looks the
+            fused image is what is shown — because that is what the reader
+            worked from.</span></div></div>
+          <div class="point"><i class="amber"></i><div><b>Capped at probable,
+            on capability alone</b><span>This camera measures 110px of plate.
+            Whatever the reader's confidence, a camera measured below the
+            threshold cannot produce a confirmed match.</span></div></div>
+          <div class="point"><i class="blue"></i><div><b>Sightings with no
+            image say so</b><span>A row whose footage was not retained reads
+            "no image retained" rather than showing a stand-in.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Confidence with its reason attached</span>
+    <span class="sp"></span><span class="pg"></span></div>
+</section>
+
+<!-- ═══ 7 · governance ══════════════════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">Governance as architecture</span>
+    <span class="sp"></span><span class="thr">read threshold
+    <b class="n" data-n="grid.read_threshold_px" data-suffix="px"></b></span></div>
+  <div class="body">
+    <h2>A bundle that survives being challenged by someone who does not
+      trust me.</h2>
+    <div class="split" style="--split:1fr 1.25fr">
+      <div class="shot contain"><img src="SHOT_BUNDLE" alt="Evidence bundle:
+        case reference, sightings, cameras with measured capability, audit
+        entries, SHA-256 over the bundle and the audit chain verdict"></div>
+      <div class="col">
+        <div class="points" style="margin-top:0">
+          <div class="point"><i></i><div><b>Refused before a row is read</b>
+            <span>A movement query names the case, the searching officer and
+              the officer authorising it. Without all three it is refused —
+              and the refusal is logged.</span></div></div>
+          <div class="point"><i class="amber"></i><div><b>Tamper-evident by
+            construction</b><span>Every entry hashes the one before it.
+            Editing or deleting one breaks the chain and names the row that
+            broke. <span class="n" data-n="registry.audit_entries"></span>
+            entries verify today.</span></div></div>
+          <div class="point"><i class="blue"></i><div><b>The bundle hashes
+            itself into that chain</b><span>SHA-256 over the exported object,
+            written to the log as it leaves. The camera block carries measured
+            capability, so "how do you know it was that vehicle" has a
+            number for an answer.</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Evidence, not export</span><span class="sp"></span>
+    <span class="pg"></span></div>
+</section>
+
+<!-- ═══ 8 · faces and persons ═══════════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">Faces, persons and safety</span>
+    <span class="sp"></span><span class="thr">face floor
+    <b class="n" data-n="faces.floor_px" data-suffix="px"></b></span></div>
+  <div class="body">
+    <h2 class="wide">Facial recognition is assigned by the same control
+      plane — and on this grid it assigns it to nothing.</h2>
+    <div class="split" style="--split:1.5fr 1fr;margin-top:14px">
+      <div class="col">
+        <div class="lede" style="margin-top:0">Face matching is limited by
+          inter-ocular distance. ISO/IEC 19794-5 puts <strong>60px</strong>
+          as the enrolment floor; I use a generous
+          <strong><span class="n" data-n="faces.floor_px"></span>px</strong>
+          to even attempt one, derived from person detections through
+          published anthropometry so a reviewer can recompute it. The
+          console carries it per camera, beside plate width — the same
+          question, asked of people.</div>
+        <div class="stats" style="--cols:3;margin-top:16px">
+      <div class="stat alarm"><b class="n" data-n="faces.best_iod"
+        data-suffix="px"></b><span>best camera measured</span>
+        <small>Short by a factor of <span class="n" data-n="faces.best_short_by"></span>.
+          The worst gives <span class="n" data-n="faces.worst_iod"></span>px —
+          not a face, a smudge that resembles one.</small></div>
+      <div class="stat"><b class="n" data-n="faces.capable"></b>
+        <span>cameras assigned face matching</span>
+        <small>Measured across <span class="n" data-n="faces.people_measured"
+          data-comma="1"></span> people on
+          <span class="n" data-n="faces.n"></span> cameras. Onboard one that
+          clears the floor and it is assigned automatically, capped at
+          probable.</small></div>
+      <div class="stat teal"><b class="n">3 layers</b>
+        <span>person safety without a weapon detector</span>
+        <small>A knife is a 2px smear here. Twenty people running from one
+          point is a third of the frame — that is what is detected. False
+          alarms measured on real government footage; detection measured on
+          simulation.</small></div>
+        </div>
+      </div>
+      <div class="shot contain" style="padding:6px"><img src="SHOT_PEOPLE"
+        alt="A camera's record in the console: 9.8px between the eyes against
+        a 40px floor, no face matching here, and each person-safety layer
+        gated on what was measured"></div>
+    </div>
+  </div>
+  <div class="foot"><span>Tracking, yes. Biometric identification, not on
+    this grid.</span><span class="sp"></span><span class="pg"></span></div>
+</section>
+
+<!-- ═══ 9 · scale, the arithmetic ═══════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">Step 6 · plan for scale</span>
+    <span class="sp"></span><span class="thr">target
+    <b class="n" data-n="scaling.state_cameras" data-comma="1"></b>
+    cameras</span></div>
+  <div class="body">
+    <h2>At <em>80,000 cameras</em> the registry stops being a nicety and
+      becomes the budget.</h2>
+    <table>
+      <tr><th style="width:34%"></th>
+        <th>Run analytics on every camera</th>
+        <th>Assign by measured capability</th></tr>
+      <tr><td><b>Cameras on heavy inference</b></td>
+        <td class="num muted"><span data-n="scaling.state_cameras"
+          data-comma="1"></span></td>
+        <td class="num"><b><span data-n="scaling.heavy_cameras"
+          data-comma="1"></span></b></td></tr>
+      <tr><td><b>Datacentre GPUs required</b></td>
+        <td class="num muted">~<span data-n="scaling.gpus_all"
+          data-comma="1"></span></td>
+        <td class="num"><b>~<span data-n="scaling.gpus_assigned"></span></b></td></tr>
+      <tr><td><b>Cameras on cheap presence work</b></td>
+        <td class="num muted">0</td>
+        <td class="num"><b><span data-n="scaling.saved_cameras"
+          data-comma="1"></span></b></td></tr>
+      <tr><td><b>Raw video if centralised</b></td>
+        <td class="num muted"><span data-n="scaling.gbps_all"></span> Gbps
+          sustained</td>
+        <td class="num"><b>2–5% of raw</b> — metadata and evidence clips
+          leave the edge</td></tr>
+      <tr><td><b>Storage at full retention</b></td>
+        <td class="num muted"><span data-n="scaling.pb_30_day"></span> PB
+          at 30 days</td>
+        <td class="num"><b>72h hot · 1yr warm · 7yr case-bound</b></td></tr>
+    </table>
+    <div class="lede" style="margin-top:auto"><strong>The gap between the
+      two columns is the case for the whole design.</strong> Nothing here is
+      a projection from a vendor sheet: the unit cost comes from measured
+      throughput, and the capability share from the
+      <span class="n" data-n="grid.surveyed"></span>-camera survey.</div>
+  </div>
+  <div class="foot"><span>Scalability &amp; PoC readiness</span>
+    <span class="sp"></span><span class="pg"></span></div>
+</section>
+
+<!-- ═══ 10 · scale, the six requirements ════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">Step 6 · every requirement answered</span>
+    <span class="sp"></span><span class="thr">full plan ·
+    <b>docs/scalability-plan.md</b></span></div>
+  <div class="body">
+    <h2 class="wide">The six scalability requirements, each with a measured
+      answer.</h2>
+    <table>
+      <tr><th style="width:27%">Requirement</th><th>Answer</th>
+        <th style="width:24%">The number behind it</th></tr>
+      <tr><td><b>Hardware &amp; software</b></td>
+        <td>Edge, district and central tiers on commodity hardware.
+          Permissive licences only — no AGPL in the inference path.</td>
+        <td class="num">Apache-2.0 / BSD-3</td></tr>
+      <tr><td><b>AI processing capacity</b></td>
+        <td>50 streams per datacentre GPU as the planning midpoint, applied
+          to the assigned subset rather than the estate.</td>
+        <td class="num">~<span data-n="scaling.gpus_assigned"></span> GPUs,
+          not ~<span data-n="scaling.gpus_all" data-comma="1"></span></td></tr>
+      <tr><td><b>Network &amp; bandwidth</b></td>
+        <td>Inference at the edge; metadata and evidence clips cross the
+          network, not raw video. Low-bandwidth sites degrade to sampled
+          frames rather than dropping out.</td>
+        <td class="num">95–98% reduction</td></tr>
+      <tr><td><b>Storage &amp; retention</b></td>
+        <td>Hot / warm / cold tiers, per-department retention driven by the
+          registry's governance class.</td>
+        <td class="num">72h · 1yr · 7yr</td></tr>
+      <tr><td><b>Disaster recovery</b></td>
+        <td>Cameras re-home on edge failure; standby district; warm central
+          standby with streaming replication of the registry.</td>
+        <td class="num">RTO &lt; 1h district<br>RPO &lt; 5 min</td></tr>
+      <tr><td><b>Statewide rollout</b></td>
+        <td>Six phases from the sandbox proof to 33 districts, each with a
+          stated exit criterion — including a lens-and-aim phase before
+          expanding.</td>
+        <td class="num">18 months to
+          <span data-n="scaling.state_cameras" data-comma="1"></span></td></tr>
+    </table>
+  </div>
+  <div class="foot"><span>Secure, reliable, and costed</span>
+    <span class="sp"></span><span class="pg"></span></div>
+</section>
+
+<!-- ═══ 11 · proven vs designed ═════════════════════════════════════ -->
+<section class="slide">
+  <div class="rail"><span class="sec">What is proven, and what is not</span>
+    <span class="sp"></span><span class="thr">read threshold
+    <b class="n" data-n="grid.read_threshold_px" data-suffix="px"></b></span></div>
+  <div class="body">
+    <h2>Underclaimed on purpose. The next stage is live feeds in front of
+      you.</h2>
+    <div class="split" style="--split:1fr 1fr">
+      <div class="col">
+        <div class="tag on">Running today</div>
+        <div class="points" style="margin-top:6px">
+          <div class="point"><i></i><div><b>Measured on the real grid</b>
+            <span><span class="n" data-n="grid.surveyed"></span> of
+              <span class="n" data-n="grid.total"></span> government cameras
+              surveyed, <span class="n" data-n="grid.failed"></span> failures,
+              capability and clock drift recorded per camera.</span></div></div>
+          <div class="point"><i></i><div><b>End to end on live feeds</b>
+            <span>Ingest forced over TCP, timing from PTS, reconnect with
+              backoff — demonstrated on government cameras and on the
+              entrant's own footage.</span></div></div>
+          <div class="point"><i></i><div><b>Tested</b>
+            <span><span class="n" data-n="tests.passed"></span> automated
+              tests pass, including the organisers' own pre-submission
+              checklist as executable acceptance tests.</span></div></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="tag">Designed, not yet built</div>
+        <div class="points" style="margin-top:6px">
+          <div class="point"><i class="plum"></i><div><b>Authentication and
+            RBAC</b><span>The case-linked gate is real and tested; the
+            identity behind it belongs to eGujCop or departmental AD with
+            MFA. Stated plainly rather than implied.</span></div></div>
+          <div class="point"><i class="plum"></i><div><b>Masking on export
+            </b><span>Uninvolved parties should be obscured in bundles. The
+            hosted build withholds them; obscuring them inside an image a
+            case is entitled to is not built.</span></div></div>
+          <div class="point"><i class="plum"></i><div><b>Person
+            re-identification and dispersal</b><span>Validated in simulation
+            only. There is no government footage of an attack, and there
+            will not be one.</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="lede" style="margin-top:14px"><strong>Next:</strong> the
+      live test on 12–13 October — ~50 heterogeneous cameras onboarded, a
+      designated vehicle tracked, alerts, movement history and GIS, on the
+      infrastructure the state already owns.</div>
+  </div>
+  <div class="foot"><span>Honesty is the deployment strategy</span>
+    <span class="sp"></span><span class="pg"></span></div>
+</section>
+
+<!-- ═══ 12 · thank you ══════════════════════════════════════════════ -->
+<section class="slide close">
+  <div class="mark">Sentinel<span>.</span></div>
+  <div class="body">
+    <h1>Thank you.</h1>
+    <div class="lede" style="font-size:19px">Open the console and try it.
+      Search a registration, clear the case reference, and watch it refuse.</div>
+    <div class="links">
+      <div class="link"><span>Hosted console</span>
+        <b>sentinel-gujaratpolice-demo.vercel.app</b></div>
+      <div class="link"><span>Committee credentials</span>
+        <b>reviewer / gujarat2026</b></div>
+      <div class="link"><span>Source</span>
+        <b>github.com/meherzankturel/sentinel-gujarat-police</b></div>
+      <div class="link"><span>Entrant</span>
+        <b>Meherzan Turel · individual</b></div>
+    </div>
+  </div>
+  <div class="foot"><span>Gujarat Police Hackathon Innovation Challenge 2026</span>
+    <span class="sp"></span><span class="pg"></span></div>
+</section>
+
+<script>
+const DECK = /*DECK_DATA*/{}/*END*/;
+
+/* Pull a dotted path out of the measured data. */
+function at(path){
+  return path.split(".").reduce((o,k)=>(o==null?o:o[k]), DECK);
+}
+
+/* Fill every element that names a measurement. Nothing on these slides is
+   typed by hand; if a number is missing it shows as a dash rather than a
+   plausible-looking invention. */
+document.querySelectorAll("[data-n]").forEach(el=>{
+  let v = at(el.dataset.n);
+  if(v==null){ el.textContent="—"; return; }
+  if(el.dataset.pct) v = (v*100).toFixed(el.dataset.pct==="1"?1:0)+"%";
+  else if(el.dataset.comma) v = Number(v).toLocaleString("en-IN");
+  if(el.dataset.suffix) v = v+el.dataset.suffix;
+  el.textContent = v;
+});
+
+/* Page numbers follow the order of the deck rather than being typed into
+   it, so reordering a slide cannot leave a wrong number behind. */
+document.querySelectorAll(".slide").forEach((s,i)=>{
+  const pg = s.querySelector(".pg");
+  if(pg) pg.textContent = String(i+1).padStart(2,"0") + " / " +
+    String(document.querySelectorAll(".slide").length).padStart(2,"0");
+});
+
+const CAP_COLOUR = {
+  "plate-capable":"var(--cap-plate)",
+  "plate-occasional":"var(--cap-marginal)",
+  "plate-marginal":"var(--cap-marginal)",
+  "presence-only":"var(--cap-presence)",
+  "no-vehicles-observed":"var(--cap-unknown)",
+  "unusable":"var(--cap-unusable)"
+};
+
+/* ── the signature ─────────────────────────────────────────────────────
+   Every surveyed camera as a dot on the one axis that decides what it may
+   be asked to do. The threshold is drawn as a hard line because that is
+   what it is: left of it, a plate cannot be read at all. */
+(function axis(){
+  const host = document.getElementById("axis");
+  if(!host || !DECK.grid) return;
+  const cams = DECK.grid.cameras.filter(c=>c.plate_p90!=null);
+  if(!cams.length) return;
+
+  const W=1140, H=210, L=14, R=W-210, TOP=20, BASE=H-44;
+  const max = Math.max(140, ...cams.map(c=>c.plate_p90))*1.06;
+  const x = px => L + (px/max)*(R-L);
+  const thr = DECK.grid.read_threshold_px;
+
+  // Beeswarm: dots that would overlap stack upward, so the pile-up below
+  // the threshold reads as density rather than as a single marker.
+  const R_DOT=6.5, GAP=R_DOT*2.1, lanes=[];
+  const placed = [...cams]
+    .sort((a,b)=>a.plate_p90-b.plate_p90)
+    .map(c=>{
+      const cx = x(c.plate_p90);
+      let lane = 0;
+      while(lanes[lane]!=null && cx - lanes[lane] < GAP) lane++;
+      lanes[lane] = cx;
+      return {c, cx, cy: BASE - 12 - lane*GAP};
+    });
+
+  const dots = placed.map(p=>
+    `<circle cx="${p.cx.toFixed(1)}" cy="${p.cy.toFixed(1)}" r="${R_DOT}"
+       fill="${CAP_COLOUR[p.c.capability] || "var(--cap-presence)"}"
+       opacity="${p.c.plate_p90 >= thr ? 1 : .82}"></circle>`).join("");
+
+  const ticks = [0, 60, 120, 240, 360, 480]
+    .filter(t=>t<=max)
+    .map(t=>`<text x="${x(t).toFixed(1)}" y="${BASE+18}" fill="var(--dim)"
+        font-family="var(--mono)" font-size="10" text-anchor="middle">${t}px</text>`)
+    .join("");
+
+  host.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">
+      <line x1="${L}" y1="${BASE}" x2="${R+40}" y2="${BASE}"
+            stroke="var(--line)" stroke-width="1"></line>
+      <rect x="${x(thr)}" y="${TOP}" width="${R+40-x(thr)}" height="${BASE-TOP}"
+            fill="var(--cap-plate)" opacity=".05"></rect>
+      <line x1="${x(thr)}" y1="${TOP}" x2="${x(thr)}" y2="${BASE}"
+            stroke="var(--cap-plate)" stroke-width="1.5"
+            stroke-dasharray="4 3"></line>
+      <text x="${x(thr)+9}" y="${TOP+12}" fill="var(--cap-plate)"
+            font-family="var(--mono)" font-size="11" font-weight="600">
+        ${thr}px — a plate can be read</text>
+      <text x="${x(thr)-9}" y="${TOP+12}" fill="var(--dim)"
+            font-family="var(--mono)" font-size="11" text-anchor="end">
+        below this, presence only</text>
+      ${dots}${ticks}
+    </svg>`;
+})();
+</script>
+</body>
+</html>

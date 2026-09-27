@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Sentinel — How it works</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F6F5F2; --card:#FFFFFF; --ink:#1B1F24; --mid:#5C6672; --soft:#98A1AC;
+  --line:#DCD9D2;
+  --best:#0E8F73;      /* only the sharpest cameras */
+  --mid2:#C4830D;      /* most cameras            */
+  --basic:#3C6EA5;     /* every camera            */
+  --sans:"Archivo",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+     width:1500px;padding:52px 60px 46px;-webkit-font-smoothing:antialiased}
+
+header{margin-bottom:44px}
+h1{font-size:30px;font-weight:700;letter-spacing:-.015em}
+header p{color:var(--mid);font-size:15px;margin-top:7px}
+
+.step{background:var(--card);border:1px solid var(--line);border-radius:10px;
+      padding:24px 28px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.num{display:inline-flex;align-items:center;justify-content:center;
+     width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;
+     font-size:13px;font-weight:600;margin-right:12px;flex:none}
+.title{display:flex;align-items:center;margin-bottom:9px}
+.title h2{font-size:19px;font-weight:600}
+.step p{color:var(--mid);font-size:14.5px;line-height:1.6;max-width:900px}
+
+.arrow{display:flex;flex-direction:column;align-items:center;padding:5px 0}
+.arrow i{display:block;width:2px;height:26px;background:var(--line)}
+.arrow b{display:block;width:0;height:0;border-left:6px solid transparent;
+         border-right:6px solid transparent;border-top:8px solid var(--line)}
+
+/* the decision step */
+.step.key{border:2px solid var(--best);background:#F1FAF7}
+.step.key .num{background:var(--best)}
+.gate{margin-top:16px;padding:14px 18px;background:#E4F4EF;
+      border-radius:8px;font-size:14.5px;color:#0B6F5A;line-height:1.55}
+.gate b{font-weight:600}
+
+/* fork */
+.fork{display:flex;justify-content:center;gap:0;padding:4px 0 0}
+.forkline{width:706px;height:30px;border-left:2px solid var(--line);
+          border-right:2px solid var(--line);border-top:2px solid var(--line);
+          border-radius:10px 10px 0 0;margin-top:26px;position:relative}
+.forkline::before,.forkline::after{content:"";position:absolute;bottom:-22px;
+          width:0;height:0;border-left:6px solid transparent;
+          border-right:6px solid transparent;border-top:8px solid var(--line)}
+.forkline::before{left:-7px}
+.forkline::after{right:-7px}
+.forkline i{position:absolute;bottom:-22px;width:2px;height:22px;
+          background:var(--line)}
+.forkline i.l{left:-1px} .forkline i.r{right:-1px}
+.forkstem{width:2px;height:26px;background:var(--line);margin:0 auto}
+
+.lanes{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:0}
+.lane{background:var(--card);border:1px solid var(--line);border-radius:10px;
+      padding:24px 26px 20px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.lane h3{font-size:18px;font-weight:600;margin-bottom:6px}
+.lane .lead{color:var(--mid);font-size:14px;line-height:1.55;margin-bottom:18px}
+.job{display:flex;align-items:flex-start;gap:13px;padding:14px 0;
+     border-top:1px solid var(--line)}
+.pill{flex:none;width:11px;height:11px;border-radius:50%;margin-top:5px}
+.job .txt{flex:1}
+.job .h{font-size:15px;font-weight:500}
+.job .s{color:var(--soft);font-size:13px;margin-top:2px}
+.job .who{font-size:12.5px;color:var(--mid);white-space:nowrap;
+          background:#F1F0EC;border-radius:20px;padding:4px 11px;margin-top:2px}
+
+.merge{width:2px;height:26px;background:var(--line);margin:0 auto}
+.mergeline{width:706px;height:30px;border-left:2px solid var(--line);
+           border-right:2px solid var(--line);border-bottom:2px solid var(--line);
+           border-radius:0 0 10px 10px;margin:0 auto}
+
+.tiers{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap}
+.tier{border:1px solid var(--line);border-radius:8px;padding:12px 16px;flex:1;
+      min-width:230px;background:#FCFCFB}
+.tier .t{font-size:14.5px;font-weight:600;margin-bottom:3px}
+.tier .d{font-size:13px;color:var(--mid);line-height:1.5}
+
+.outs{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+.out{background:#F1F0EC;border-radius:20px;padding:7px 15px;font-size:13.5px}
+
+footer{margin-top:44px;border-top:1px solid var(--line);padding-top:24px}
+footer h4{font-size:13px;font-weight:600;color:var(--soft);
+          text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px}
+.notes{display:grid;grid-template-columns:repeat(4,1fr);gap:26px}
+.note .h{font-size:14.5px;font-weight:600;margin-bottom:4px}
+.note .b{font-size:13.5px;color:var(--mid);line-height:1.55}
+
+/* Printed as one page at the width the diagram is drawn for. A4 portrait
+   clipped the right-hand column -- the half about danger to people -- which
+   is the worst possible thing to lose off the edge of a diagram. */
+@page{size:1620px 1760px;margin:0}
+@media print{body{width:1620px}}
+</style></head><body>
+
+<header>
+  <h1>Sentinel — how the system works</h1>
+  <p>Integrated Video Management &amp; Analytics Platform · Gujarat Police Hackathon Innovation Challenge 2026 · Meherzan Turel, individual entrant</p>
+</header>
+
+<div class="step">
+  <div class="title"><span class="num">1</span><h2>The cameras</h2></div>
+  <p>30 government cameras in the test grid. Around 80,000 across Gujarat, owned by 26 different
+     departments. Different makes, different ages, and none of them were built to work together.</p>
+</div>
+
+<div class="arrow"><i></i><b></b></div>
+
+<div class="step">
+  <div class="title"><span class="num">2</span><h2>Connect to each camera</h2></div>
+  <p>Open a camera, keep the picture steady, and cope when the feed drops — reconnect on its own,
+     wait a little longer each time, and never lose track of when each frame was actually filmed.</p>
+</div>
+
+<div class="arrow"><i></i><b></b></div>
+
+<div class="step key">
+  <div class="title"><span class="num">3</span><h2>Find out what each camera can really see</h2></div>
+  <p>Watch each camera for a minute and measure it. How big do vehicles actually look?
+     Does the camera swivel? How dark does it get at night? Is its clock telling the truth?</p>
+  <div class="gate"><b>This is the important part.</b> Nothing can watch 80,000 cameras at once — so
+     each camera is given only the jobs it is physically able to do. A camera that can't read a
+     number plate isn't asked to try.</div>
+</div>
+
+<div class="forkstem"></div>
+<div class="fork"><div class="forkline"><i class="l"></i><i class="r"></i></div></div>
+
+<div class="lanes">
+  <div class="lane">
+    <h3>Watching for vehicles</h3>
+    <div class="lead">Following a specific car, van or bike across the city.</div>
+
+    <div class="job"><span class="pill" style="background:var(--basic)"></span>
+      <div class="txt"><div class="h">Spot every vehicle</div>
+        <div class="s">Type, colour, size, which way it's going</div></div>
+      <div class="who">every camera</div></div>
+
+    <div class="job"><span class="pill" style="background:var(--mid2)"></span>
+      <div class="txt"><div class="h">Recognise the same vehicle again</div>
+        <div class="s">Match it on the next camera without needing the plate</div></div>
+      <div class="who">most cameras</div></div>
+
+    <div class="job"><span class="pill" style="background:var(--best)"></span>
+      <div class="txt"><div class="h">Read the number plate</div>
+        <div class="s">Only when the plate is big enough in the picture to actually read</div></div>
+      <div class="who">close-up only</div></div>
+  </div>
+
+  <div class="lane">
+    <h3>Watching for danger to people</h3>
+    <div class="lead">Spotting violence as it happens. No face recognition.</div>
+
+    <div class="job"><span class="pill" style="background:var(--basic)"></span>
+      <div class="txt"><div class="h">A crowd suddenly runs away</div>
+        <div class="s">You don't need to see the weapon to see the panic</div></div>
+      <div class="who">every camera</div></div>
+
+    <div class="job"><span class="pill" style="background:var(--mid2)"></span>
+      <div class="txt"><div class="h">Someone raises an arm, or falls</div>
+        <div class="s">Body position only — not faces, not expressions</div></div>
+      <div class="who">most cameras</div></div>
+
+    <div class="job"><span class="pill" style="background:var(--best)"></span>
+      <div class="txt"><div class="h">A weapon in someone's hand</div>
+        <div class="s">A knife is only a few pixels unless the camera is close</div></div>
+      <div class="who">close-up only</div></div>
+  </div>
+</div>
+
+<div class="mergeline"></div>
+<div class="merge"></div>
+<div class="arrow" style="padding-top:0"><b></b></div>
+
+<div class="step">
+  <div class="title"><span class="num">4</span><h2>Is this worth an officer's time?</h2></div>
+  <p>Too many alerts is what makes these systems fail — officers stop reading them. So every
+     sighting is graded, and only the strong ones interrupt anyone.</p>
+  <div class="tiers">
+    <div class="tier"><div class="t" style="color:var(--best)">Sure</div>
+      <div class="d">Good camera, clear reading. Raise the alert.</div></div>
+    <div class="tier"><div class="t" style="color:var(--mid2)">Fairly sure</div>
+      <div class="d">Raise it, but show the officer why it is not certain.</div></div>
+    <div class="tier"><div class="t" style="color:var(--basic)">Not sure</div>
+      <div class="d">Don't interrupt anyone. Quietly add it to the evidence.</div></div>
+  </div>
+</div>
+
+<div class="arrow"><i></i><b></b></div>
+
+<div class="step">
+  <div class="title"><span class="num">5</span><h2>What the officer sees</h2></div>
+  <p>One screen. Search for a vehicle, see everywhere it has been, and hand the file to a court.</p>
+  <div class="outs">
+    <span class="out">Map of every camera and what it can do</span>
+    <span class="out">The vehicle's route, with a confidence on each sighting</span>
+    <span class="out">Where it is likely to appear next</span>
+    <span class="out">Court-ready evidence file in one click</span>
+  </div>
+</div>
+
+<footer>
+  <h4>Built in from the start</h4>
+  <div class="notes">
+    <div class="note"><div class="h">Every search is logged</div>
+      <div class="b">Each one records the case it belongs to and the officer who authorised it.</div></div>
+    <div class="note"><div class="h">The log can't be edited quietly</div>
+      <div class="b">Each entry is sealed against the one before it, so any change shows up.</div></div>
+    <div class="note"><div class="h">Bystanders masked on export</div>
+      <div class="b">Designed, not yet built, and named here rather than implied. Today an uninvolved person's record is withheld entirely; obscuring them inside an image a case is entitled to is the remaining work.</div></div>
+    <div class="note"><div class="h">No face recognition</div>
+      <div class="b">A deliberate choice. The system detects what people do, not who they are.</div></div>
+  </div>
+</footer>
+
+</body></html>

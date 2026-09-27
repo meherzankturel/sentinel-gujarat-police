@@ -1,0 +1,1649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel — Vehicle movement reconstruction</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231A1D23'/><circle cx='16' cy='16' r='7' fill='none' stroke='%230E9E83' stroke-width='3'/><circle cx='16' cy='16' r='2' fill='%230E9E83'/></svg>">
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Light console. The evaluators will see this on a laptop in daylight and
+     as screenshots inside a PDF, where a dark panel goes muddy; the control
+     room can have a dark build later. Warm neutrals rather than pure grey,
+     so the capability colours stay the only saturated thing on screen. */
+  --ink:#FAF9F6; --panel:#FFFFFF; --panel2:#F3F1EB; --line:#E4E1D9;
+  --bone:#1A1D23; --mist:#5C6672; --dim:#8A9098;
+  --veil:#FFFFFF;            /* backdrop behind things floating over the map */
+  --shadow:rgba(31,29,24,.14);
+
+  /* Capability is ordinal, not good/bad. A presence-only camera is not
+     "red" -- it is doing useful work. Darkened from the dark-theme ramp so
+     each one carries its weight against white. */
+  --cap-plate:#0E9E83;      /* reads plates            */
+  --cap-marginal:#B8780F;   /* partial reads           */
+  --cap-presence:#3E6E94;   /* counts and tracks       */
+  --cap-unusable:#8A5F6B;   /* not usable              */
+  --cap-novehicles:#6E6480; /* works, watches no road  */
+  --cap-unknown:#BDB8AE;    /* not yet measured        */
+
+  /* Confidence reuses the capability ramp on purpose. A tier is capped by
+     what the camera was measured able to do, so the two scales are the
+     same scale and colouring them differently would hide that. */
+  --t-confirmed:var(--cap-plate);
+  --t-probable:var(--cap-marginal);
+  --t-corroborating:var(--cap-presence);
+
+  /* The one colour outside the ramp, reserved for a claim the physics
+     rejects. Nothing else on this screen is allowed to use it, so when it
+     appears it means exactly one thing. */
+  --alarm:#C62A3C;
+  --sans:"Archivo",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--ink);color:var(--bone);font-family:var(--sans);
+  font-size:14px;line-height:1.45;overflow:hidden;-webkit-font-smoothing:antialiased;
+}
+.shell{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+/* ---------------------------------------------------------- topbar */
+.topbar{
+  display:flex;align-items:baseline;gap:18px;padding:14px 20px;
+  border-bottom:1px solid var(--line);background:var(--panel);
+}
+.mark{font-weight:700;font-size:15px;letter-spacing:.18em;text-transform:uppercase}
+.mark span{color:var(--cap-plate)}
+.tagline{color:var(--mist);font-size:12.5px}
+.back{
+  color:var(--dim);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  text-decoration:none;border-bottom:1px solid transparent;
+}
+.back:hover{color:var(--bone);border-bottom-color:var(--line)}
+.topbar .counts{margin-left:auto;display:flex;gap:22px}
+.counts b{font-family:var(--mono);font-size:15px;font-weight:600;display:block}
+.counts b.warn{color:var(--alarm)}
+.counts i{font-style:normal;color:var(--dim);font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase}
+
+/* Three columns rather than two. The timeline is the finding, not a
+   sidebar to the map: at two columns the search form pushes all but the
+   first sighting below the fold, which is the one thing an officer must
+   be able to take in at a glance. */
+.body{display:grid;grid-template-columns:308px 372px 1fr;min-height:0}
+
+/* A narrower screen loses width, not the finding. The old rule here hid
+   the timeline outright below 1380px -- on a 1366 laptop, which is what a
+   reviewer is most likely to be sitting at, the one column that holds the
+   sightings simply was not there. So the columns tighten first, then the
+   form and the timeline share a column beside the map, and only on a
+   phone does anything stack. */
+@media (max-width:1380px){.body{grid-template-columns:276px 340px 1fr}}
+@media (max-width:1120px){
+  .body{grid-template-columns:330px 1fr;grid-template-rows:minmax(0,auto) minmax(0,1fr)}
+  .side{grid-area:1/1;max-height:46vh}
+  .mid{grid-area:2/1;border-top:1px solid var(--line)}
+  .mapwrap{grid-area:1/2/3/3}
+}
+@media (max-width:820px){
+  body{overflow:auto}
+  .shell{height:auto;min-height:100vh}
+  .topbar{flex-wrap:wrap;gap:9px 14px;padding:12px 14px}
+  .topbar .counts{margin-left:0;width:100%;gap:16px;flex-wrap:wrap}
+  .body{grid-template-columns:1fr;grid-template-rows:none}
+  /* Source order, which is also the order of work: search, then what was
+     found, then where it went. */
+  .mapwrap{grid-area:auto;height:58vh}
+  .side,.mid{grid-area:auto;max-height:none;overflow:visible;
+    border-right:0;border-top:1px solid var(--line)}
+}
+
+/* --------------------------------------------------------- sidebar */
+.side,.mid{background:var(--panel);border-right:1px solid var(--line);
+  overflow-y:auto;overflow-x:hidden;min-height:0}
+/* select() scrolls an entry into view; the sticky header above it is 64px
+   of opaque panel, and without this the row it lands on arrives with its
+   timestamp already hidden behind it. */
+.mid{scroll-padding-top:64px}
+.side::-webkit-scrollbar,.mid::-webkit-scrollbar{width:8px}
+.side::-webkit-scrollbar-thumb,.mid::-webkit-scrollbar-thumb{
+  background:var(--panel2);border-radius:4px}
+.midhead{
+  position:sticky;top:0;z-index:2;background:var(--panel);
+  padding:15px 18px 12px;border-bottom:1px solid var(--line);
+}
+.block{padding:15px 18px}
+.block+.block{border-top:1px solid var(--line)}
+.h{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:4px}
+.sub{color:var(--mist);font-size:12px;margin-bottom:14px}
+
+/* ------------------------------- the query, as an authorisation form */
+.field{margin-bottom:8px}
+.field label{display:block;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.field input{
+  width:100%;background:var(--ink);border:1px solid var(--line);border-radius:2px;
+  color:var(--bone);font-family:var(--mono);font-size:13px;padding:8px 10px;
+}
+.field input:focus{outline:none;border-color:var(--cap-plate)}
+.field.plate input{font-size:18px;letter-spacing:.09em;font-weight:600;padding:9px 10px}
+/* Two officers, one authorisation, so the fields sit side by side. They
+   have to align on rows rather than in boxes: "Searching officer" wraps
+   to two lines in this column and "Authorised by" does not, which left
+   the two inputs sitting at different heights -- the kind of small
+   crookedness that makes a form look untended. Labels share one row,
+   inputs share the next, however either label wraps. */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-bottom:8px}
+.two .field{display:contents}
+.two .field:first-child  label{grid-column:1;grid-row:1}
+.two .field:first-child  input{grid-column:1;grid-row:2}
+.two .field:last-child   label{grid-column:2;grid-row:1}
+.two .field:last-child   input{grid-column:2;grid-row:2}
+.two label{align-self:end;margin-bottom:0}
+/* A rank and a surname is fourteen characters and it must not be cut in
+   half: an officer's name is the accountability on this screen. */
+.two input{font-size:12.5px;padding:8px}
+
+/* Below the widest layout the column is too narrow to hold both names,
+   so they stack rather than truncate. On a phone the sidebar is full
+   width again and the pair fits. */
+@media (max-width:1380px) and (min-width:821px){
+  .two{grid-template-columns:1fr}
+  .two .field:last-child label{grid-column:1;grid-row:3}
+  .two .field:last-child input{grid-column:1;grid-row:4}
+}
+.go{
+  width:100%;margin-top:4px;padding:9px;border:0;border-radius:2px;cursor:pointer;
+  background:var(--cap-plate);color:var(--ink);font-family:var(--sans);
+  font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+}
+.go:hover{filter:brightness(1.08)}
+.gate{margin-top:10px;color:var(--dim);font-size:10.8px;line-height:1.5}
+.gate b{color:var(--mist);font-weight:500}
+
+.refuse{
+  margin-top:12px;border-left:2px solid var(--alarm);background:color-mix(in srgb, var(--alarm) 7%, transparent);
+  padding:10px 12px;font-size:12px;color:var(--bone);
+}
+.refuse b{display:block;color:var(--alarm);font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;margin-bottom:4px}
+
+/* ------------------------------------------------ watchlist verdict */
+.hit{display:flex;gap:12px;align-items:flex-start}
+.hit .flag{
+  font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;padding:3px 7px;border-radius:2px;flex:none;
+  background:color-mix(in srgb, var(--alarm) 14%, transparent);color:var(--alarm);
+  border:1px solid color-mix(in srgb, var(--alarm) 35%, transparent);
+}
+.hit .who{font-size:13px}
+.hit .who small{display:block;color:var(--mist);font-size:11.5px;margin-top:2px}
+
+/* ------------------------------------------------------ tier legend */
+.tiers{display:flex;gap:8px;flex-wrap:wrap}
+.tiers .tp{
+  display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mist);
+  border:1px solid var(--line);border-radius:2px;padding:4px 7px;
+}
+.tiers .tp b{font-family:var(--mono);color:var(--bone);font-weight:600}
+
+/* --------------------------------------------------------- timeline */
+.tl{padding:6px 18px 40px;position:relative}
+.evt{
+  position:relative;padding:8px 0 8px 30px;cursor:pointer;
+  border-left:1px solid var(--line);margin-left:11px;
+}
+.evt:hover .card{background:var(--panel2)}
+.evt .num{
+  position:absolute;left:-11px;top:11px;width:22px;height:22px;border-radius:50%;
+  display:grid;place-items:center;font-family:var(--mono);font-size:11px;
+  font-weight:600;background:var(--ink);
+}
+.card{border-radius:2px;padding:7px 10px;transition:background .15s ease}
+.evt.sel .card{background:var(--panel2);box-shadow:inset 2px 0 0 var(--bone)}
+.when{font-family:var(--mono);font-size:12.5px;letter-spacing:.02em}
+.when small{color:var(--dim);font-weight:400;font-size:10.5px;margin-left:6px}
+.where{color:var(--mist);font-size:12px;margin-top:1px}
+.readline{
+  display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap;
+}
+.plate{font-family:var(--mono);font-size:13.5px;letter-spacing:.06em;font-weight:600}
+.chip{
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:2px 6px;border-radius:2px;font-weight:600;
+}
+.conf{font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto}
+/* The sighting as an officer expects to see one: the vehicle, and the
+   plate crop the read was actually made from. Not decoration -- "show me
+   the car" is the first thing anyone asks of a row like this, and a
+   console that can only answer it in prose is asking to be taken on
+   trust. Both crops are cut from the frame the read came from, which is
+   not the same frame as the arrival time printed above them. */
+/* The two pictures are different heights -- a car is not the shape of a
+   number plate -- so the figures stretch and the captions are pushed to a
+   common bottom edge. Captions floating at two different heights read as
+   a layout that was not looked at. */
+.shots{display:flex;gap:8px;margin-top:7px;align-items:stretch}
+.shots figure{margin:0;min-width:0;display:flex;flex-direction:column}
+.shots figcaption{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--dim);margin-top:auto;padding-top:4px}
+.shots img{display:block;border:1px solid var(--line);border-radius:2px;
+  background:var(--ink);cursor:zoom-in}
+.shots img:hover{border-color:var(--mist)}
+.shots figure:first-child{flex:0 0 auto}
+.shots figure:last-child{flex:1 1 auto}
+.shots img.car{height:88px;width:auto;max-width:150px;object-fit:cover}
+/* The plate takes what is left of the column and shrinks to fit it. A
+   fixed width ran the crop off the right-hand edge, which on a screen
+   whose argument is "here is the evidence" is the worst place to clip. */
+.shots img.plate{height:auto;max-height:46px;max-width:100%;
+  object-fit:contain;padding:2px;align-self:flex-start}
+/* Said rather than left blank. A row with no image is a row whose footage
+   was not retained, which is a fact about this demonstration and not a
+   thing to hide behind an empty space. */
+.noshot{margin-top:7px;padding-left:7px;border-left:1px dashed var(--line);
+  color:var(--dim);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase}
+.gridtag{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--dim);border:1px solid var(--line);border-radius:2px;
+  padding:1px 5px;margin-left:6px;white-space:nowrap}
+.caveat{
+  margin-top:5px;font-size:11px;color:var(--mist);line-height:1.42;
+  padding-left:9px;border-left:1px solid var(--line);
+}
+.caveat b{color:var(--bone);font-weight:600}
+
+/* Confidence is expressed as visual weight, not only as a word. A
+   corroborating sighting is drawn hollow, dashed and dimmed, so an officer
+   skim-reading a timeline cannot mistake it for evidence that stands up. */
+.evt.confirmed .num{background:var(--t-confirmed);color:var(--ink);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--cap-plate) 15%, transparent)}
+.evt.confirmed{border-left-color:color-mix(in srgb, var(--cap-plate) 40%, transparent)}
+.evt.confirmed .chip{background:var(--t-confirmed);color:var(--ink)}
+
+.evt.probable .num{background:var(--t-probable);color:var(--ink)}
+.evt.probable{border-left-color:color-mix(in srgb, var(--cap-marginal) 32%, transparent)}
+.evt.probable .chip{background:var(--t-probable);color:var(--ink)}
+.evt.probable .card{opacity:.94}
+
+.evt.corroborating .num{background:transparent;color:var(--t-corroborating);
+  border:1px dashed var(--t-corroborating)}
+.evt.corroborating{border-left-style:dashed;border-left-color:color-mix(in srgb, var(--cap-presence) 35%, transparent)}
+.evt.corroborating .chip{background:transparent;color:var(--t-corroborating);
+  border:1px dashed color-mix(in srgb, var(--cap-presence) 60%, transparent)}
+.evt.corroborating .card{opacity:.68}
+.evt.corroborating .plate{font-weight:400}
+
+/* --------------------------------------------------------- the legs */
+.leg{
+  margin-left:11px;padding:4px 0 4px 30px;border-left:1px solid var(--line);
+  font-family:var(--mono);font-size:10.5px;color:var(--dim);
+  display:flex;gap:11px;
+}
+.leg.bad{
+  border-left:1px solid var(--alarm);background:color-mix(in srgb, var(--alarm) 6%, transparent);
+  color:var(--alarm);display:block;padding:8px 10px 9px 30px;margin-right:0;
+}
+.leg.bad .hd{
+  font-family:var(--sans);font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;font-weight:700;margin-bottom:3px;
+}
+.leg.bad .nums{color:var(--alarm);font-size:12px}
+.leg.bad ul{margin:6px 0 0 0;padding:0;list-style:none;
+  font-family:var(--sans);font-size:11.5px;color:var(--bone);opacity:.85}
+.leg.bad li{padding-left:11px;position:relative;line-height:1.5}
+.leg.bad li:before{content:"·";position:absolute;left:2px;color:var(--alarm)}
+
+/* A warning an officer only meets by scrolling is not a warning. The
+   flagged leg keeps its place in the timeline, and is announced at the top
+   of the column as well, because it changes what the whole reconstruction
+   means. */
+.banner{
+  margin-top:11px;border:1px solid color-mix(in srgb, var(--alarm) 40%, transparent);border-left-width:2px;
+  background:color-mix(in srgb, var(--alarm) 9%, transparent);border-radius:2px;padding:8px 10px;cursor:pointer;
+}
+.banner .hd{font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  font-weight:700;color:var(--alarm);margin-bottom:3px}
+.banner .bd{font-size:11.5px;color:var(--bone);line-height:1.45}
+.banner .bd b{font-family:var(--mono);font-weight:600;color:var(--alarm)}
+.banner:hover{background:color-mix(in srgb, var(--alarm) 15%, transparent)}
+
+.empty{padding:40px 20px;color:var(--dim);font-size:12.5px;line-height:1.6}
+
+/* ------------------------------------------------------------- map */
+.mapwrap{position:relative;min-height:0}
+#map{position:absolute;inset:0;background:var(--ink)}
+.leaflet-container{background:var(--ink)}
+.leaflet-tile-pane{
+  /* Light tiles need no inversion. Desaturated a little so the
+     capability colours remain the brightest thing on the map. */
+  filter:saturate(.72) brightness(1.02) contrast(.96);
+}
+.leaflet-control-attribution{
+  background:color-mix(in srgb, var(--veil) 90%, transparent)!important;color:var(--dim)!important;font-size:10px!important;
+}
+.leaflet-control-attribution a{color:var(--mist)!important}
+
+.node{
+  width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  font-family:var(--mono);font-size:12px;font-weight:600;
+  box-shadow:0 0 0 1px color-mix(in srgb, var(--veil) 90%, transparent),0 2px 10px var(--shadow);
+  transition:transform .18s cubic-bezier(.2,.7,.3,1);
+}
+.node.confirmed{background:var(--t-confirmed);color:var(--ink)}
+.node.probable{background:var(--t-probable);color:var(--ink)}
+.node.corroborating{background:color-mix(in srgb, var(--veil) 90%, transparent);color:var(--t-corroborating);
+  border:1px dashed var(--t-corroborating)}
+.node.sel{transform:scale(1.3)}
+
+/* ------------------------------------------------------- evidence */
+.actions{position:absolute;right:18px;top:18px;z-index:600;display:flex;gap:10px}
+.bundlebtn{
+  background:var(--panel);border:1px solid var(--line);color:var(--bone);
+  font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;padding:10px 16px;border-radius:2px;cursor:pointer;
+  box-shadow:0 10px 30px var(--shadow);
+}
+.bundlebtn:hover{border-color:var(--cap-plate);color:var(--cap-plate)}
+.bundlebtn[disabled]{opacity:.4;cursor:default}
+.go[disabled]{opacity:.4;cursor:default;filter:none}
+.mini button[disabled],.frames button[disabled]{opacity:.4;cursor:default}
+
+.bundle{
+  position:absolute;right:18px;bottom:18px;width:390px;z-index:600;display:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  padding:16px 18px 18px;box-shadow:0 18px 50px var(--shadow);
+}
+.bundle.show{display:block}
+.bundle h2{font-size:13px;font-weight:700;letter-spacing:.06em;margin-bottom:2px}
+.bundle .case{color:var(--mist);font-family:var(--mono);font-size:11.5px;margin-bottom:13px}
+.bundle .rows{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:12px}
+.bundle .rows dt{color:var(--dim)}
+.bundle .rows dd{font-family:var(--mono);text-align:right}
+.hash{
+  margin-top:12px;padding:9px 10px;background:var(--ink);border:1px solid var(--line);
+  border-radius:2px;font-family:var(--mono);font-size:10.5px;line-height:1.5;
+  word-break:break-all;color:var(--cap-plate);
+}
+.hash em{display:block;font-style:normal;color:var(--dim);font-size:9.5px;
+  letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}
+.chain{margin-top:11px;font-size:11.5px;color:var(--mist);line-height:1.5;
+  padding-top:11px;border-top:1px solid var(--line)}
+.chain b{color:var(--cap-plate)}
+.chain b.bad{color:var(--alarm)}
+.bundle .foot{display:flex;gap:9px;margin-top:13px}
+.bundle .foot button{
+  flex:1;padding:8px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--bone);font-family:var(--sans);font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;border-radius:2px;cursor:pointer;
+}
+.bundle .foot button:hover{border-color:var(--cap-plate);color:var(--cap-plate)}
+.close{position:absolute;top:12px;right:13px;color:var(--dim);cursor:pointer;
+  font-size:16px;line-height:1;background:none;border:0}
+.close:hover{color:var(--bone)}
+
+/* ------------------------------------------------------------- the hunt
+   The hunt shares this screen's whole vocabulary on purpose. A sighting
+   recovered from the record and a sighting found by searching footage are
+   the same kind of claim about the same vehicle, and drawing them
+   differently would suggest one is worth more than the other. What differs
+   is only what each one carries: a hunt result carries its picture. */
+.designation{display:grid;grid-template-columns:104px 1fr;gap:11px;align-items:start}
+.designation img{
+  width:104px;height:72px;object-fit:cover;background:var(--ink);
+  border:1px solid var(--line);border-radius:2px;cursor:zoom-in;
+}
+.dmeta{font-size:11.5px;color:var(--mist);line-height:1.5}
+.dmeta b{color:var(--bone);font-weight:600;display:block;font-size:12.5px}
+.dmeta .mono{display:block;font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:3px}
+.mini{display:flex;gap:8px;margin-top:10px}
+.mini button{
+  flex:1;padding:7px 4px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--bone);font-family:var(--sans);font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;border-radius:2px;cursor:pointer;
+}
+.mini button:hover{border-color:var(--cap-plate);color:var(--cap-plate)}
+
+/* The camera picker states, before anything is searched, the best tier each
+   camera could possibly return. An officer who learns that only from a
+   demoted result will read it as the system losing confidence in the
+   vehicle, when it is the registry being honest about the camera. */
+.camlist{display:flex;flex-direction:column;gap:6px}
+.cam{
+  display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:start;
+  border:1px solid var(--line);border-radius:2px;padding:7px 9px;cursor:pointer;
+}
+.cam:hover{background:var(--panel2)}
+.cam input{margin-top:3px;accent-color:var(--cap-plate)}
+.cam .nm{font-size:12.5px;line-height:1.3}
+.cam .nm small{display:block;color:var(--mist);font-size:11px;margin-top:2px}
+.cap{
+  font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+  padding:2px 5px;border-radius:2px;border:1px solid;display:inline-block;margin-top:5px;
+}
+.cap.plate-capable{color:var(--cap-plate);border-color:color-mix(in srgb, var(--cap-plate) 50%, transparent)}
+.cap.plate-marginal,.cap.plate-occasional{color:var(--cap-marginal);border-color:color-mix(in srgb, var(--cap-marginal) 50%, transparent)}
+.cap.presence-only{color:var(--cap-presence);border-color:color-mix(in srgb, var(--cap-presence) 50%, transparent)}
+.cap.unknown,.cap.no-vehicles-observed{color:var(--dim);border-color:var(--line)}
+.ceil{font-size:10.5px;color:var(--dim);line-height:1.45;margin-top:4px}
+.ceil b{color:var(--mist);font-weight:500}
+
+.frames{display:flex;gap:6px;margin-top:2px}
+.frames button{
+  flex:1;padding:6px 2px;border:1px solid var(--line);background:var(--ink);
+  color:var(--mist);font-family:var(--mono);font-size:11px;border-radius:2px;cursor:pointer;
+}
+.frames button.on{border-color:var(--cap-plate);color:var(--cap-plate);background:var(--panel2)}
+
+/* Progress is shown per camera because the search is per camera. One bar
+   for the whole hunt would hide the fact that cameras are opened one at a
+   time, which is the constraint the architecture is built around. */
+.stage{font-size:11.5px;color:var(--mist);line-height:1.5;margin-bottom:11px}
+.stage b{color:var(--bone);font-weight:500}
+.spin{
+  display:inline-block;width:7px;height:7px;border-radius:50%;flex:none;
+  background:var(--cap-plate);margin-right:7px;animation:pulse 1.15s infinite;
+}
+@keyframes pulse{0%,100%{opacity:.2}50%{opacity:1}}
+.prow{margin-bottom:11px}
+.prow .lbl{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:11.5px;color:var(--mist)}
+.prow .lbl b{color:var(--bone);font-family:var(--mono);font-weight:600;font-size:12px}
+.prow .lbl em{font-style:normal;font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+.bar{height:3px;background:var(--panel2);border-radius:2px;overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;width:0;background:var(--cap-plate);
+  transition:width .35s linear}
+.bar.done i{background:var(--dim)}
+.bar.hit i{background:var(--t-probable)}
+.prog{
+  display:flex;justify-content:space-between;gap:10px;margin-top:4px;
+  font-family:var(--mono);font-size:10px;color:var(--dim);white-space:nowrap;
+}
+.aud{margin-top:4px;padding-top:11px;border-top:1px solid var(--line);
+  font-size:11px;color:var(--dim);line-height:1.5}
+.aud code{font-family:var(--mono);font-size:10px;color:var(--cap-plate);
+  word-break:break-all;display:block;margin-top:3px}
+
+/* Two pictures, the same size, side by side. The system proposes and a
+   human disposes -- and a human cannot dispose of a similarity score. */
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:9px 0 7px}
+.pair figure{margin:0}
+.pair img{
+  width:100%;height:92px;object-fit:cover;background:var(--ink);
+  border:1px solid var(--line);border-radius:2px;cursor:zoom-in;display:block;
+}
+.pair figcaption{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--dim);margin-top:4px}
+.eye{font-size:10.5px;color:var(--dim);margin:-2px 0 5px}
+
+/* Searched and found nothing is a result, not an absence of one. It is the
+   false-positive rate made visible, and it is the number that decides
+   whether an officer can act on anything above it. */
+.clear{margin:18px 0 0 11px;border-left:1px solid var(--line);
+  padding:10px 0 0 30px}
+.clear .hd{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:5px}
+.clear .bd{font-size:11.5px;color:var(--mist);line-height:1.5}
+.clear .bd b{font-family:var(--mono);color:var(--bone);font-weight:600}
+
+/* A camera that was searched and saw nothing still belongs on the map. An
+   officer needs to see the shape of where the search looked, not only where it
+   found something. */
+.camnode{
+  width:16px;height:16px;border-radius:3px;background:color-mix(in srgb, var(--veil) 90%, transparent);
+  border:2px solid var(--cap-unknown);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--veil) 90%, transparent),0 2px 8px var(--shadow);
+}
+.camnode.plate-capable{border-color:var(--cap-plate)}
+.camnode.plate-marginal,.camnode.plate-occasional{border-color:var(--cap-marginal)}
+.camnode.presence-only{border-color:var(--cap-presence)}
+
+/* ------------------------------------------------------------- overlays */
+/* What the squares and the circles mean. A map a panel has to be talked
+   through is a map that will be misread the moment nobody is talking. */
+.maplegend{
+  position:absolute;left:18px;top:18px;z-index:600;display:none;
+  /* Was a hardcoded dark panel left over from the dark console: on the
+     light theme it rendered dark-on-dark and the legend was unreadable
+     over the map. Uses the surface tokens like everything else now. */
+  background:color-mix(in srgb, var(--panel) 94%, transparent);
+  border:1px solid var(--line);border-radius:2px;
+  padding:10px 12px;font-size:10.5px;color:var(--mist);line-height:1.6;
+  box-shadow:0 2px 10px var(--shadow);
+}
+.maplegend.show{display:block}
+.maplegend div{display:flex;align-items:center;gap:8px}
+.maplegend .k{width:16px;display:grid;place-items:center;flex:none}
+.maplegend .sq{width:11px;height:11px;border-radius:2px;
+  border:2px solid var(--cap-presence);background:color-mix(in srgb, var(--veil) 90%, transparent)}
+.maplegend .ci{width:12px;height:12px;border-radius:50%;background:var(--t-probable)}
+.maplegend .ch{width:12px;height:12px;border-radius:50%;background:transparent;
+  border:1px dashed var(--t-corroborating)}
+
+.veil{
+  position:fixed;inset:0;background:rgba(6,8,12,.92);z-index:2000;display:none;
+  place-items:center;padding:40px;
+}
+.veil.show{display:grid}
+.veil figure{margin:0;text-align:center}
+.veil img{max-width:min(1180px,92vw);max-height:78vh;border:1px solid var(--line);
+  border-radius:2px}
+.veil figcaption{margin-top:12px;color:var(--mist);font-size:12.5px}
+/* The veil is dark and --bone is the dark ink this console writes on
+   paper-coloured panels, so the bold half of every caption in here was
+   being drawn black on black. The light token is the one that belongs on
+   this background. */
+.veil figcaption b{color:var(--ink);font-family:var(--mono);font-weight:600}
+
+.picker{
+  width:min(880px,92vw);max-height:82vh;overflow-y:auto;background:var(--panel);
+  border:1px solid var(--line);border-radius:3px;padding:20px 22px 22px;position:relative;
+}
+.picker h2{font-size:14px;font-weight:700;letter-spacing:.04em;margin-bottom:3px}
+.picker .sub{margin-bottom:14px}
+.picker select{
+  background:var(--ink);border:1px solid var(--line);color:var(--bone);
+  font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:2px;
+}
+.picker .row{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+.picker .row .go{width:auto;margin:0;padding:9px 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:11px}
+.grid figure{margin:0;cursor:pointer;border:1px solid var(--line);border-radius:2px;
+  padding:6px;background:var(--ink)}
+.grid figure:hover{border-color:var(--cap-plate)}
+.grid img{width:100%;height:96px;object-fit:cover;display:block;border-radius:2px}
+.grid figcaption{font-size:10.5px;color:var(--mist);margin-top:6px;
+  font-family:var(--mono)}
+
+:focus-visible{outline:2px solid var(--cap-plate);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="mark">Sentinel<span>.</span></div>
+    <div class="tagline">Vehicle movement reconstruction — every sighting, with its confidence stated</div>
+    <a class="back" href="/">← Camera registry</a>
+    <div class="counts">
+      <div><b id="k-sight">—</b><i>sightings</i></div>
+      <div><b id="k-cams">—</b><i>cameras</i></div>
+      <div><b id="k-span">—</b><i>elapsed</i></div>
+      <div><b id="k-dist">—</b><i>tracked</i></div>
+      <div><b id="k-bad">—</b><i>impossible legs</i></div>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="side">
+      <section class="block">
+        <div class="h">Vehicle search</div>
+        <div class="sub">Case-linked. Refused without an authorising officer.</div>
+        <div class="field plate">
+          <label for="f-plate">Registration</label>
+          <input id="f-plate" value="GJ01AB1234" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="f-case">Case reference</label>
+          <input id="f-case" value="FIR-0117/2026" autocomplete="off">
+        </div>
+        <div class="two">
+          <div class="field">
+            <!-- "Searched by" rather than "Searching officer": it is one
+                 line in this column where the longer form wrapped and the
+                 other label did not, and it is the pair of words the
+                 evidence bundle itself prints. -->
+            <label for="f-off">Searched by</label>
+            <input id="f-off" value="PSI R. Chauhan" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="f-auth">Authorised by</label>
+            <input id="f-auth" value="DySP M. Parmar" autocomplete="off">
+          </div>
+        </div>
+        <button class="go" id="go">Search</button>
+        <div class="gate">
+          Refused without a case and an authorising officer. The query is
+          written to the <b>tamper-evident log</b> before any result is
+          returned.
+        </div>
+        <div id="refuse"></div>
+      </section>
+
+      <!-- The hunt reuses the case and the authorising officer entered
+           above. Two authorisation forms on one screen would invite two
+           different answers to the same question. -->
+      <section class="block">
+        <div class="h">Hunt live footage</div>
+        <div class="sub">Find a designated vehicle on cameras nobody has
+          searched yet. Case-linked to the same authorisation above.</div>
+
+        <div class="h" style="margin-top:2px">Designated vehicle</div>
+        <div class="designation">
+          <img id="h-target" src="/static/assets/designated-vehicle.jpg" alt="The designated vehicle">
+          <div class="dmeta">
+            <b id="h-tname">Car</b>
+            <span id="h-tsrc">Designated in the proven run, from cam09.</span>
+            <span class="mono" id="h-tplate"></span>
+          </div>
+        </div>
+        <div id="h-inputs">
+          <div class="mini">
+            <button id="h-upload">Upload photograph</button>
+            <button id="h-pick">Pick from a camera</button>
+          </div>
+          <input type="file" id="h-file" accept="image/*" hidden>
+
+          <div class="field" style="margin-top:13px">
+            <label for="h-plate">Registration, if known</label>
+            <input id="h-plate" value="GJ01AB1234" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="gate" style="margin-top:0">
+            Carried on the designation and shown with every result. It does not
+            drive the match: the median vehicle on this grid yields <b>27px</b>
+            of plate against the <b>~120px</b> a read needs, so identity is
+            carried by appearance and the plate corroborates it.
+          </div>
+        </div>
+
+        <div id="h-controls">
+          <div class="h" style="margin-top:15px">Cameras to search</div>
+          <div class="camlist" id="h-cams">
+            <div class="ceil">Reading the registry…</div>
+          </div>
+
+          <div class="h" style="margin-top:15px">Footage per camera</div>
+          <div class="frames" id="h-frames"></div>
+          <div class="gate" style="margin-top:6px">
+            Bounded, and the bound is reported with the answer. “Not found”
+            means not found <b>in this window</b> — never that the search
+            quietly gave up.
+          </div>
+
+          <button class="go" id="h-go" style="margin-top:11px">Begin hunt</button>
+        </div>
+        <div id="h-refuse"></div>
+      </section>
+
+      <section class="block" id="h-progress" style="display:none"></section>
+
+      <section class="block" id="verdict" style="display:none"></section>
+      <section class="block" id="tierbar" style="display:none"></section>
+
+    </aside>
+
+    <section class="mid">
+      <div class="midhead">
+        <div class="h" id="midh">Reconstructed movement</div>
+        <div class="sub" id="midsub" style="margin-bottom:0">
+          In corrected time order, oldest first.</div>
+        <div id="alarm"></div>
+      </div>
+      <div class="tl" id="timeline">
+        <div class="empty">
+          Enter a registration to reconstruct its movement across the grid.
+        </div>
+      </div>
+    </section>
+
+    <div class="mapwrap">
+      <div id="map"></div>
+      <div class="maplegend" id="legend">
+        <div><span class="k"><i class="sq"></i></span> camera opened, ring shows measured capability</div>
+        <div><span class="k"><i class="ci"></i></span> probable sighting</div>
+        <div><span class="k"><i class="ch"></i></span> corroborating sighting</div>
+      </div>
+      <div class="actions">
+        <button class="bundlebtn" id="h-dl" style="display:none">Download hunt record</button>
+        <button class="bundlebtn" id="mk" disabled>Produce evidence bundle</button>
+      </div>
+      <div id="b-refuse" class="actions" style="display:none"></div>
+      <div class="bundle" id="bundle">
+        <button class="close" id="bclose" aria-label="Close">×</button>
+        <h2>Evidence bundle</h2>
+        <div class="case" id="b-case"></div>
+        <dl class="rows" id="b-rows"></dl>
+        <div class="hash"><em>SHA-256 over the bundle</em><span id="b-hash"></span></div>
+        <div class="chain" id="b-chain"></div>
+        <div class="foot">
+          <button id="b-dl">Download JSON</button>
+          <button id="b-copy">Copy hash</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Full frame, with the vehicle boxed where the system found it. The
+     officer confirms against the whole scene, not against a thumbnail. -->
+<div class="veil" id="veil">
+  <figure>
+    <img id="veil-img" alt="">
+    <figcaption id="veil-cap"></figcaption>
+  </figure>
+</div>
+
+<div class="veil" id="picker">
+  <div class="picker">
+    <button class="close" id="p-close" aria-label="Close">&times;</button>
+    <h2>Pick the vehicle out of a camera</h2>
+    <div class="sub">In a live incident nobody has a clean photograph — they
+      have “the car that came through this junction”. This reads the camera
+      and offers what it saw. Case-linked and logged, like any other read.</div>
+    <div class="row">
+      <select id="p-cam"></select>
+      <button class="go" id="p-go">Read the camera</button>
+      <span class="ceil" id="p-stage" style="margin:0"></span>
+    </div>
+    <div class="grid" id="p-grid"></div>
+  </div>
+</div>
+
+<script src="/static/vendor/leaflet.js"></script>
+<script>
+const TIER = {
+  confirmed:     {label:"Confirmed",     colour:"var(--t-confirmed)"},
+  probable:      {label:"Probable",      colour:"var(--t-probable)"},
+  corroborating: {label:"Corroborating", colour:"var(--t-corroborating)"},
+};
+const CAP = {
+  "plate-capable":"reads plates", "plate-marginal":"partial reads",
+  "plate-occasional":"occasional reads", "presence-only":"counts and tracks",
+  "no-vehicles-observed":"no vehicles observed", "unusable":"not usable",
+  "unknown":"not yet measured",
+};
+
+let map, layer, state = {sightings:[], legs:[], markers:{}, sel:null, q:null};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// Every stored time is UTC. An officer works in IST, so the display is IST
+// and the UTC value stays visible beside it -- a timeline that quietly
+// switches zone is the same class of error as one that quietly corrects a
+// camera clock.
+const ist = z => new Date(z).toLocaleTimeString("en-IN",
+  {timeZone:"Asia/Kolkata", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false});
+const istDate = z => new Date(z).toLocaleDateString("en-IN",
+  {timeZone:"Asia/Kolkata", day:"2-digit", month:"short"});
+
+function initMap(){
+  map = L.map("map",{zoomControl:false}).setView([23.15,72.60],11);
+  L.control.zoom({position:"bottomleft"}).addTo(map);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {attribution:"© OpenStreetMap contributors", maxZoom:19}).addTo(map);
+  layer = L.layerGroup().addTo(map);
+}
+
+function form(){
+  return {plate:$("f-plate").value.trim(), case_ref:$("f-case").value.trim(),
+          officer:$("f-off").value.trim(), authorised_by:$("f-auth").value.trim()};
+}
+const qs = o => new URLSearchParams(o).toString();
+
+async function run(){
+  const f = form();
+  $("refuse").innerHTML = "";
+  // The page runs one search on load, so pressing the button with the
+  // same registration in the box redraws an identical screen and reads as
+  // a dead control. It is not: say so for as long as the round trip takes.
+  const label = $("go").textContent;
+  $("go").disabled = true;
+  $("go").textContent = "Searching…";
+  try {
+    return await search(f);
+  } finally {
+    $("go").textContent = label;
+    $("go").disabled = false;
+  }
+}
+
+async function search(f){
+  const s = await fetch("/api/officer/search?" + qs(f));
+  if(!s.ok){
+    const d = (await s.json()).detail || {};
+    // The refusal is rendered as carefully as a result. It is the
+    // governance argument doing its job in front of the panel, not an
+    // error state to be hidden behind an alert box.
+    $("refuse").innerHTML = `<div class="refuse"><b>Search refused</b>
+      ${esc(d.message || "Rejected.")}
+      ${d.missing ? "<br><br>Missing: " + d.missing.map(esc).join(", ") : ""}</div>`;
+    reset();
+    return;
+  }
+  const search = await s.json();
+  const route = await fetch("/api/officer/route?" + qs(f)).then(r => r.json());
+
+  state.sightings = search.sightings;
+  state.legs = route.legs;
+  state.q = f;
+  draw(search, route);
+}
+
+function reset(){
+  state = {sightings:[], legs:[], markers:{}, sel:null, q:null};
+  layer.clearLayers();
+  $("timeline").innerHTML = `<div class="empty">No reconstruction on screen.</div>`;
+  // The summary line and the impossible-transit banner belong to the search
+  // that produced them. Leaving them up after a refusal put "2 sightings
+  // across 5 departments" directly above "No reconstruction on screen", and
+  // a screen that contradicts itself is worse than an empty one -- on a
+  // console whose entire argument is that it states what it knows.
+  $("midsub").textContent = "";
+  $("alarm").innerHTML = "";
+  $("verdict").style.display = $("tierbar").style.display = "none";
+  $("mk").disabled = true;
+  $("bundle").classList.remove("show");
+  ["k-sight","k-cams","k-span","k-dist","k-bad"].forEach(k => $(k).textContent = "—");
+}
+
+function draw(search, route){
+  // A hunt attached from the URL owns this screen. The record search that
+  // runs on load must not paint over it a moment later.
+  if(hunt.id) return;
+  const sum = route.summary;
+  $("midh").textContent = "Reconstructed movement";
+  labels(RECORD_LABELS);
+  $("k-sight").textContent = sum.sightings;
+  $("k-cams").textContent  = sum.cameras;
+  $("k-span").textContent  = sum.span_minutes != null ? sum.span_minutes + "m" : "—";
+  $("k-dist").textContent  = sum.distance_km + "km";
+  $("k-bad").textContent   = sum.impossible_legs;
+  $("k-bad").className     = sum.impossible_legs ? "warn" : "";
+
+  // Nothing found is an answer, and it has to be drawn like one.
+  //
+  // This used to fall through to the summary line, which reads
+  // state.sightings[0] -- undefined on an empty result -- and threw
+  // before the timeline or the map were touched. The screen kept the
+  // previous vehicle's route under a header of zeroes: the worst of both,
+  // since it reads as "the button did nothing" and shows another
+  // vehicle's movements while claiming none were found.
+  if(!state.sightings.length){
+    layer.clearLayers();
+    state.markers = {};
+    $("verdict").style.display = $("tierbar").style.display = "none";
+    $("alarm").innerHTML = "";
+    $("mk").disabled = true;
+    $("bundle").classList.remove("show");
+    $("midsub").textContent = "Nothing found. The search was logged anyway.";
+    $("timeline").innerHTML = `<div class="empty">
+      No sighting of <b>${esc(search.plate)}</b> on any camera in the
+      registry.<br><br>
+      That is the answer, not a failure: this registration was searched
+      across every camera the registry holds and none of them saw it. The
+      query was written to the tamper-evident log before this answer was
+      given, exactly as a search that found something would be.</div>`;
+    return;
+  }
+
+  const w = search.watchlist;
+  $("verdict").style.display = w ? "" : "none";
+  if(w){
+    $("verdict").innerHTML = `
+      <div class="h">Watchlist</div>
+      <div class="sub">Matched before the officer typed anything.</div>
+      <div class="hit">
+        <span class="flag">${esc(w.reason)}</span>
+        <div class="who"><b>${esc(w.plate_number)}</b> · ${esc(w.colour||"")}
+          ${esc(w.make||"")} ${esc(w.model||"")}
+          <small>Priority ${esc(w.priority)} · listed under ${esc(w.case_ref||"—")}
+            since ${esc(w.valid_from||"—")}</small></div>
+      </div>`;
+  }
+
+  $("tierbar").style.display = "";
+  $("tierbar").innerHTML = `<div class="h">Confidence of the ${sum.sightings} sightings</div>
+    <div class="sub">A tier is capped by what the camera was measured able to resolve.</div>
+    <div class="tiers">` +
+    ["confirmed","probable","corroborating"].map(t =>
+      `<div class="tp"><span style="width:8px;height:8px;border-radius:50%;
+         background:${TIER[t].colour};display:inline-block;
+         ${t==="corroborating"?"background:transparent;border:1px dashed "+TIER[t].colour+";":""}"></span>
+       ${TIER[t].label}<b>${search.tiers[t]||0}</b></div>`).join("") + `</div>`;
+
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  $("midsub").innerHTML = `${istDate(state.sightings[0].at)} ·
+    ${plural(sum.sightings, "sighting", "sightings")} on
+    ${plural(sum.cameras, "camera", "cameras")} across
+    ${plural(search.departments.length, "department", "departments")} ·
+    ${sum.distance_km} km in ${sum.span_minutes} minutes, corrected time order.`;
+  const bad = state.legs.filter(l => l.impossible);
+  $("alarm").innerHTML = bad.map(l => `
+    <div class="banner" data-seq="${l.to_seq}">
+      <div class="hd">Impossible transit — sighting ${l.from_seq} to ${l.to_seq}</div>
+      <div class="bd">${esc(l.from_camera)} to ${esc(l.to_camera)}: ${l.km} km in
+        ${l.seconds} seconds implies <b>${l.implied_kmh} km/h</b>. Either two
+        vehicles carry this plate, or a camera clock is wrong. The route below
+        is shown, not corrected.</div>
+    </div>`).join("");
+  document.querySelectorAll(".banner").forEach(el =>
+    el.addEventListener("click", () => select(+el.dataset.seq, false)));
+
+  drawTimeline();
+  drawMap();
+  $("mk").disabled = false;
+}
+
+function caveats(s){
+  const out = [];
+  if(!s.plate_claimed)
+    out.push(`No plate read. ${s.camera_id} was measured
+      <b>${CAP[s.capability_class]}</b> — it contributed a vehicle to this
+      track and is not permitted to claim the number.`);
+  else if(!s.exact_read)
+    out.push(`Read <b>${esc(s.plate_read)}</b>, ${s.read_distance} from the
+      registration searched — OCR-confusable characters. Recovered by
+      matching, demoted for it.`);
+  if(s.plate_claimed && s.capability_class === "plate-capable" &&
+     s.tier === "corroborating" && s.plate_confidence < 0.6)
+    out.push(`Camera is plate-capable; this particular read is not.
+      ${(s.plate_confidence*100).toFixed(0)}% on the frame — too weak to
+      raise on its own, kept as corroboration.`);
+  if(s.capability_class !== "plate-capable" && s.plate_claimed)
+    out.push(`${s.camera_id} measures ${s.plate_px_measured}px of plate;
+      capped at ${TIER[s.tier].label.toLowerCase()} on capability alone.`);
+  // Only drift large enough to change the order of sightings or the
+  // implied speed of a leg is worth an officer's attention. Announcing a
+  // 1.5s correction on every row would bury the camera that is seven
+  // minutes out among five that are not.
+  if(s.clock_material)
+    out.push(`Camera clock <b>${s.clock_drift_s > 0 ? "+" : ""}${s.clock_drift_s}s</b> out
+      — it stamped ${esc(s.wallclock_utc.slice(11,19))}Z on this frame.
+      Corrected before ordering.`);
+  if(s.governance_class === "sensitive")
+    out.push(`Health department footage — patient confidentiality applies on
+      top of ordinary privacy duty. This access is case-linked and logged.`);
+  return out;
+}
+
+// The registry's own words for the three estates. A reviewer reading
+// "cam-02 - Sector 21 Crossing, Gandhinagar - Police" would otherwise
+// reasonably take it for a police camera on a street; it is a local mock
+// feed, and the own feed is the one carrying real pixels.
+const GRID = {"government":"government feed", "local-mock":"local mock",
+              "own-feed":"own feed", "unclassified":"grid unknown"};
+
+// Both stills open full size in the same lightbox the hunt uses. An
+// officer deciding whether this is the vehicle needs it bigger than a
+// timeline row allows, and a picture that cannot be looked at properly is
+// decoration rather than evidence.
+function openShot(src, caption){
+  $("veil-img").src = src;
+  $("veil-cap").innerHTML = caption;
+  $("veil").classList.add("show");
+}
+
+function shotsFor(s){
+  if(!s.evidence_ref)
+    return `<div class="noshot">No image retained for this sighting</div>`;
+  const base = "/static/assets/evidence/" + encodeURIComponent(s.evidence_ref);
+  return `<div class="shots">
+      <figure>
+        <img class="car" src="${base}-vehicle.jpg" loading="lazy"
+             alt="The vehicle as ${esc(s.camera_id)} saw it"
+             data-cap="<b>${esc(s.camera_id)} · ${esc(s.location_name)}</b><br>
+               The vehicle in the frame this read came from · ${ist(s.at)} IST"
+             title="Cut from the frame this read came from, which is later than
+the arrival time above: a track is read from its best look, not its first.">
+        <figcaption>As ${esc(s.camera_id)} saw it</figcaption>
+      </figure>
+      <figure>
+        <img class="plate" src="${base}-plate.jpg" loading="lazy"
+             alt="The plate crop the reader worked from"
+             data-cap="<b>${s.plate_claimed ? esc(s.plate_read) : "no plate read"}</b><br>
+               The pixels the reader worked from, at the size it had them ·
+               ${esc(s.camera_id)} measured ${s.plate_px_measured ?? "—"}px of plate"
+             title="The pixels the reader worked from, at the size it had them.">
+        <figcaption>As read</figcaption>
+      </figure>
+    </div>`;
+}
+
+function drawTimeline(){
+  const legFor = n => state.legs.find(l => l.from_seq === n);
+  let html = "";
+  state.sightings.forEach(s => {
+    const t = TIER[s.tier] || TIER.corroborating;
+    const cav = caveats(s);
+    html += `
+      <div class="evt ${s.tier}" data-seq="${s.seq}">
+        <div class="num">${s.seq}</div>
+        <div class="card">
+          <div class="when">${ist(s.at)}<small>IST · ${esc(s.at.slice(11,19))}Z</small></div>
+          <div class="where">${esc(s.camera_id)} · ${esc(s.location_name)}</div>
+          <div class="where" style="color:var(--dim);font-size:11px">
+            ${esc(s.department)} · ${CAP[s.capability_class]}
+            <span class="gridtag">${esc(GRID[s.grid] || s.grid || "")}</span></div>
+          <div class="readline">
+            <span class="plate">${s.plate_claimed ? esc(s.plate_read) : "— no plate read —"}</span>
+            <span class="chip">${t.label}</span>
+            <span class="conf">${s.match_confidence != null
+              ? (s.match_confidence*100).toFixed(0)+"%" : ""}</span>
+          </div>
+          ${shotsFor(s)}
+          ${cav.length ? `<div class="caveat">${cav.join("<br>")}</div>` : ""}
+        </div>
+      </div>`;
+
+    const l = legFor(s.seq);
+    if(l){
+      html += l.impossible
+        ? `<div class="leg bad">
+             <div class="hd">Impossible transit</div>
+             <div class="nums">${l.km} km in ${l.seconds}s — implies
+               ${l.implied_kmh} km/h against a ${l.threshold_kmh} km/h ceiling</div>
+             <ul>${l.explanations.map(e => `<li>${esc(e)}</li>`).join("")}</ul>
+           </div>`
+        : `<div class="leg"><span>${l.km} km</span><span>${l.minutes} min</span>
+             <span>${l.implied_kmh} km/h</span></div>`;
+    }
+  });
+  $("timeline").innerHTML = html || `<div class="empty">No sighting of that
+    registration on any camera in the registry.</div>`;
+  document.querySelectorAll(".evt").forEach(el =>
+    el.addEventListener("click", () => select(+el.dataset.seq, true)));
+  // An image the deployment did not ship leaves nothing behind rather
+  // than a broken-picture icon claiming evidence that is not there.
+  document.querySelectorAll(".shots img").forEach(im =>
+    im.addEventListener("error", () => im.remove()));
+  document.querySelectorAll(".shots img").forEach(im =>
+    im.addEventListener("click", e => {
+      e.stopPropagation();          // the row's own click selects it
+      openShot(im.src, im.dataset.cap || "");
+    }));
+}
+
+function drawMap(){
+  $("legend").classList.remove("show");
+  layer.clearLayers();
+  state.markers = {};
+
+  // Each leg is its own polyline so an impossible one can be drawn as what
+  // it is: a line the system does not vouch for.
+  state.legs.forEach(l => {
+    // Casing first, so the route reads against both the dark ground and
+    // the pale road network the basemap draws on top of it.
+    L.polyline([[l.from_lat,l.from_lon],[l.to_lat,l.to_lon]],
+      {color:"#0A0D12", weight:6, opacity:.55}).addTo(layer);
+    L.polyline([[l.from_lat,l.from_lon],[l.to_lat,l.to_lon]], l.impossible
+      ? {color:"#FF5C6E", weight:2.5, opacity:1, dashArray:"7 6"}
+      : {color:"#57E0C4", weight:2.5, opacity:.8}).addTo(layer);
+  });
+
+  state.sightings.forEach(s => {
+    if(s.lat == null) return;
+    const m = L.marker([s.lat,s.lon], {icon: L.divIcon({
+      className:"", iconSize:[26,26], iconAnchor:[13,13],
+      html:`<div class="node ${s.tier}" data-seq="${s.seq}">${s.seq}</div>`})}).addTo(layer);
+    m.bindTooltip(`${s.camera_id} · ${s.location_name}<br>${ist(s.at)} IST · ${TIER[s.tier].label}`,
+      {direction:"top", offset:[0,-14], className:"tt"});
+    m.on("click", () => select(s.seq, false));
+    state.markers[s.seq] = m;
+  });
+
+  const pts = state.sightings.filter(s => s.lat != null).map(s => [s.lat, s.lon]);
+  if(pts.length) map.fitBounds(pts, {paddingTopLeft:[70,90], paddingBottomRight:[430,70]});
+}
+
+function select(seq, fly){
+  state.sel = seq;
+  const s = state.sightings.find(x => x.seq === seq);
+  if(!s) return;
+  document.querySelectorAll(".evt").forEach(e =>
+    e.classList.toggle("sel", +e.dataset.seq === seq));
+  document.querySelectorAll(".node").forEach(e =>
+    e.classList.toggle("sel", +e.dataset.seq === seq));
+  if(fly && s.lat != null) map.setView([s.lat, s.lon], 14, {animate:true});
+  else document.querySelector(`.evt[data-seq="${seq}"]`)
+             ?.scrollIntoView({block:"center", behavior:"smooth"});
+  state.markers[seq]?.openTooltip();
+}
+
+// ---------------------------------------------------------- evidence
+
+let lastBundle = null;
+
+async function makeBundle(){
+  const label = $("mk").textContent;
+  $("mk").disabled = true;
+  $("mk").textContent = "Producing…";
+  const r = await fetch("/api/officer/evidence?" + qs(state.q), {method:"POST"})
+    .finally(() => { $("mk").textContent = label; $("mk").disabled = false; });
+  const d = await r.json();
+  // Producing a bundle is the most consequential action here. It failing
+  // silently -- which is what `if(!r.ok) return` did -- is worse than it
+  // failing loudly: the officer is left believing an export exists.
+  if(!r.ok){
+    $("b-refuse").style.display = "";
+    refuseInto("b-refuse", d.detail || d);
+    return;
+  }
+  $("b-refuse").style.display = "none";
+  lastBundle = d;
+  const b = d.bundle, c = b.audit_chain;
+
+  $("b-case").textContent = `${b.case_ref} · prepared by ${b.prepared_by} · authorised by ${b.authorised_by}`;
+  $("b-rows").innerHTML = `
+    <dt>Vehicle</dt><dd>${esc(b.subject.plate_as_searched)}</dd>
+    <dt>Sightings</dt><dd>${b.sightings.length}</dd>
+    <dt>Cameras, with measured capability</dt><dd>${b.cameras.length}</dd>
+    <dt>Impossible legs</dt><dd>${b.route.legs.filter(l=>l.impossible).length}</dd>
+    <dt>Audit entries for this case</dt><dd>${b.audit_trail.length}</dd>
+    <dt>Generated</dt><dd>${esc(b.generated_at)}</dd>`;
+  $("b-hash").textContent = d.integrity.sha256;
+  $("b-chain").innerHTML = c.case_entries_intact
+    ? `Audit chain: <b>every entry for this case verifies</b> against its
+       recorded predecessor.${c.intact ? "" :
+       ` The log carries an altered entry at #${c.first_broken_id}, outside
+         this case — reported rather than removed.`}`
+    : `Audit chain: <b class="bad">entries for this case do not verify</b>
+       (#${c.case_entries_altered.join(", #")}). Do not rely on this bundle
+       until that is explained.`;
+  $("bundle").classList.add("show");
+}
+
+$("go").addEventListener("click", run);
+$("f-plate").addEventListener("keydown", e => { if(e.key === "Enter") run(); });
+$("mk").addEventListener("click", makeBundle);
+$("bclose").addEventListener("click", () => $("bundle").classList.remove("show"));
+$("b-copy").addEventListener("click", () =>
+  navigator.clipboard?.writeText(lastBundle.integrity.sha256));
+$("b-dl").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(lastBundle, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `evidence_${lastBundle.bundle.case_ref.replace(/\W+/g,"_")}_`
+             + `${lastBundle.bundle.subject.plate_normalised}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+initMap();
+run();
+
+// ---------------------------------------------------------------- hunt
+//
+// The screen above answers a question about footage already looked at.
+// This drives the search that looks. Two rules govern everything here.
+//
+// The officer is never shown a spinner. A hunt takes as long as the footage
+// takes to decode, so the page shows which camera is open, how far through
+// it is, and what has been found so far -- the wait is the demonstration,
+// not an obstacle to it.
+//
+// And every result arrives with a picture. The system's whole posture is
+// that it proposes and a person disposes; a similarity score is not
+// something a person can dispose of, and a photograph of the vehicle beside
+// the designated one is.
+
+const HUNT_LABELS = ["sightings", "cameras searched", "frames examined",
+                     "searched & clear", "impossible legs"];
+const RECORD_LABELS = ["sightings", "cameras", "elapsed", "tracked",
+                       "impossible legs"];
+
+let hunt = {id:null, timer:null, data:null, sources:[],
+            chosen:new Set(), frames:300,
+            target:{preset:true},
+            targetNote:"Designated in the proven run, from cam09.",
+            picker:{id:null, timer:null}};
+
+function labels(list){
+  document.querySelectorAll(".counts i")
+    .forEach((el, i) => el.textContent = list[i]);
+}
+
+function auth(){
+  return {case_ref:$("f-case").value.trim(), officer:$("f-off").value.trim(),
+          authorised_by:$("f-auth").value.trim()};
+}
+
+// A refusal is rendered with the same care as a result, wherever it lands.
+function refuseInto(id, d){
+  $(id).innerHTML = `<div class="refuse"><b>${esc(d.title || "Refused")}</b>
+    ${esc(d.message || "Rejected.")}
+    ${d.remedy ? "<br><br>" + esc(d.remedy) : ""}
+    ${d.missing ? "<br><br>Missing: " + d.missing.map(esc).join(", ") : ""}
+    ${d.available ? "<br><br>Available: " + d.available.map(esc).join(", ") : ""}</div>`;
+}
+
+// ------------------------------------------------------------- sources
+
+async function loadSources(){
+  const r = await fetch("/api/officer/hunt/sources");
+  const d = await r.json();
+  // The hunt is the one thing on this console that cannot run everywhere:
+  // the hosted deployment has no GPU and says so, in full, with a 501.
+  // Render that answer where the camera list would have gone. Leaving
+  // "Reading the registry…" up for ever teaches a reviewer that the
+  // console is broken, when what actually happened is that it was told
+  // something precise and threw it away.
+  if(!r.ok){
+    // Take the controls away rather than leaving headings over nothing,
+    // and take the inputs with them. Disabling them was not enough: a
+    // disabled button that still looks like a button is an invitation to
+    // click something that will not answer, directly above a paragraph
+    // explaining that it cannot. What stays is what still means
+    // something -- what the hunt is for, the vehicle designated in the
+    // proven run, and why this deployment cannot run it.
+    $("h-controls").style.display = "none";
+    $("h-inputs").style.display = "none";
+    refuseInto("h-refuse", d.detail || d);
+    return;
+  }
+  hunt.sources = d.cameras;
+  hunt.frames = d.default_frames;
+  d.cameras.forEach(c => hunt.chosen.add(c.camera_id));
+  drawCameraPicker();
+  drawFrameChoices();
+  $("p-cam").innerHTML = d.cameras.map(c =>
+    `<option value="${esc(c.camera_id)}">${esc(c.camera_id)} — ${esc(c.location_name)}</option>`).join("");
+}
+
+function drawCameraPicker(){
+  $("h-cams").innerHTML = hunt.sources.map(c => `
+    <label class="cam">
+      <input type="checkbox" value="${esc(c.camera_id)}"
+             ${hunt.chosen.has(c.camera_id) ? "checked" : ""}>
+      <div>
+        <div class="nm"><b>${esc(c.camera_id)}</b> · ${esc(c.location_name)}
+          <small>${esc(c.department || "—")} · ${c.seconds}s of ${esc(c.window)}
+            footage held</small></div>
+        <span class="cap ${esc(c.capability_class || "unknown")}">
+          ${esc(c.capability_class || "not yet measured")}</span>
+        <div class="ceil">Best tier obtainable here:
+          <b>${esc(TIER[c.ceiling.tier].label)}</b> — ${esc(c.ceiling.reason)}.</div>
+      </div>
+    </label>`).join("");
+  document.querySelectorAll("#h-cams input").forEach(el =>
+    el.addEventListener("change", () => {
+      el.checked ? hunt.chosen.add(el.value) : hunt.chosen.delete(el.value);
+    }));
+}
+
+function drawFrameChoices(){
+  $("h-frames").innerHTML = [150, 300, 600].map(n =>
+    `<button data-n="${n}" class="${n === hunt.frames ? "on" : ""}">${n} frames</button>`).join("");
+  document.querySelectorAll("#h-frames button").forEach(el =>
+    el.addEventListener("click", () => {
+      hunt.frames = +el.dataset.n;
+      drawFrameChoices();
+    }));
+}
+
+// --------------------------------------------------------- designation
+
+function setTarget(spec, src, note, name){
+  hunt.target = spec;
+  hunt.targetNote = note;
+  $("h-target").src = src;
+  $("h-tsrc").textContent = note;
+  $("h-tname").textContent = name || "Car";
+}
+
+$("h-upload").addEventListener("click", () => $("h-file").click());
+$("h-file").addEventListener("change", () => {
+  const f = $("h-file").files[0];
+  if(!f) return;
+  const fr = new FileReader();
+  fr.onload = () => setTarget({image_b64: fr.result}, fr.result,
+    `Uploaded photograph — ${f.name}.`, "Designated vehicle");
+  fr.readAsDataURL(f);
+});
+
+$("h-pick").addEventListener("click", () => {
+  $("picker").classList.add("show");
+  $("p-stage").textContent = "";
+});
+$("p-close").addEventListener("click", () => {
+  $("picker").classList.remove("show");
+  clearInterval(hunt.picker.timer);
+});
+
+$("p-go").addEventListener("click", async () => {
+  $("p-grid").innerHTML = "";
+  $("p-stage").innerHTML = `<span class="spin"></span>Opening the camera…`;
+  const r = await fetch("/api/officer/hunt/designate", {
+    method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({...auth(), camera:$("p-cam").value, max_frames:300})});
+  const d = await r.json();
+  if(!r.ok){
+    $("p-stage").innerHTML = "";
+    $("p-grid").innerHTML = `<div style="grid-column:1/-1">` +
+      `<div class="refuse"><b>Refused</b>${esc((d.detail||{}).message || "Rejected.")}
+       ${(d.detail||{}).missing ? "<br><br>Missing: " +
+         (d.detail).missing.map(esc).join(", ") : ""}</div></div>`;
+    return;
+  }
+  hunt.picker.id = d.hunt_id;
+  hunt.picker.named = true;
+  clearInterval(hunt.picker.timer);
+  hunt.picker.timer = setInterval(pollPicker, 1200);
+  pollPicker();
+});
+
+async function pollPicker(){
+  const d = await fetch("/api/officer/hunt/" + hunt.picker.id).then(r => r.json());
+  const cam = d.cameras[0] || {};
+  // Attaching to a read started elsewhere: the dropdown has to name the
+  // camera the pictures below actually came from.
+  if(!hunt.picker.named && cam.camera_id){
+    $("p-cam").value = cam.camera_id;
+    hunt.picker.named = true;
+  }
+  $("p-stage").innerHTML = d.state === "done" || d.state === "failed"
+    ? esc(d.error || d.stage)
+    : `<span class="spin"></span>${esc(d.stage)} ${cam.frames_done}/${cam.frames_total} frames`;
+  $("p-grid").innerHTML = d.candidates.map(c => `
+    <figure data-c="${esc(c.candidate)}" data-img="${esc(c.image)}"
+            data-cls="${esc(c.vehicle_class)}" data-cam="${esc(c.camera_id)}"
+            data-off="${c.offset_s}">
+      <img src="${esc(c.image)}" alt="">
+      <figcaption>${esc(c.vehicle_class)} · ${c.width}px<br>
+        ${esc(c.camera_id)} +${c.offset_s}s</figcaption>
+    </figure>`).join("") ||
+    `<div class="ceil" style="grid-column:1/-1">Nothing offered yet.</div>`;
+  document.querySelectorAll("#p-grid figure").forEach(el =>
+    el.addEventListener("click", () => {
+      setTarget({from_hunt:hunt.picker.id, candidate:el.dataset.c},
+        el.dataset.img,
+        `Picked out of ${el.dataset.cam}, ${el.dataset.off}s into its window.`,
+        el.dataset.cls.charAt(0).toUpperCase() + el.dataset.cls.slice(1));
+      $("picker").classList.remove("show");
+      clearInterval(hunt.picker.timer);
+    }));
+  if(d.state === "done" || d.state === "failed") clearInterval(hunt.picker.timer);
+}
+
+// -------------------------------------------------------------- running
+
+async function beginHunt(){
+  $("h-refuse").innerHTML = "";
+  const body = {...auth(), ...hunt.target,
+                cameras:[...hunt.chosen], frames:undefined,
+                plate:$("h-plate").value.trim(), vehicle_class:"car",
+                max_frames:hunt.frames};
+  const r = await fetch("/api/officer/hunt", {
+    method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify(body)});
+  const d = await r.json();
+  if(!r.ok){
+    refuseInto("h-refuse", {...(d.detail || {}),
+      title: (d.detail||{}).error === "authorisation_required"
+             ? "Hunt refused" : "Hunt not started"});
+    return;
+  }
+  hunt.id = d.hunt_id;
+  $("mk").disabled = true;
+  $("h-dl").style.display = "";
+  clearInterval(hunt.timer);
+  hunt.scrolled = false;
+  hunt.timer = setInterval(pollHunt, 1200);
+  renderHunt(d);
+}
+
+async function pollHunt(){
+  const d = await fetch("/api/officer/hunt/" + hunt.id).then(r => r.json());
+  renderHunt(d);
+  if(d.state === "done" || d.state === "failed") clearInterval(hunt.timer);
+}
+
+function renderHunt(d){
+  hunt.data = d;
+  const s = d.summary || {};
+  labels(HUNT_LABELS);
+  $("k-sight").textContent = d.sightings.length;
+  $("k-cams").textContent  = `${s.cameras_searched ?? 0}/${d.cameras.length}`;
+  $("k-span").textContent  = s.frames_examined ?? 0;
+  $("k-dist").textContent  = (s.cameras_clear || []).length;
+  $("k-bad").textContent   = s.impossible_legs ?? 0;
+  $("k-bad").className     = s.impossible_legs ? "warn" : "";
+
+  $("h-tplate").textContent = d.target.plate
+    ? `Registration carried: ${d.target.plate}` : "";
+  drawProgress(d);
+  // Whether the hunt was started here or followed from a link, the officer
+  // should be looking at it, not hunting down the panel that shows it.
+  // Only while it is still running. Opening a finished hunt should land on
+  // what was found, not on the bars that filled up getting there.
+  if(!hunt.scrolled && (d.state === "running" || d.state === "queued")){
+    hunt.scrolled = true;
+    $("h-progress").scrollIntoView({block:"start"});
+  }
+
+  // The watchlist verdict and tier tally belong to whatever produced the
+  // sightings on screen. Leaving the record search's counts standing under
+  // a hunt would have an officer reading one search's confidence off
+  // another's results.
+  $("verdict").style.display = "none";
+  const tally = (s.by_tier || {});
+  $("tierbar").style.display = "";
+  $("tierbar").innerHTML =
+    `<div class="h">Confidence of the ${d.sightings.length} sightings</div>
+     <div class="sub">Matched on appearance. <b>Confirmed is unreachable
+       here</b> — only a legible plate supports that claim, and these
+       cameras were measured on what they can actually resolve.</div>
+     <div class="tiers">` +
+    ["confirmed","probable","corroborating"].map(t =>
+      `<div class="tp"><span style="width:8px;height:8px;border-radius:50%;
+         background:${TIER[t].colour};display:inline-block;
+         ${t==="corroborating"?"background:transparent;border:1px dashed "+TIER[t].colour+";":""}"></span>
+       ${TIER[t].label}<b>${tally[t] || 0}</b></div>`).join("") + `</div>`;
+
+  $("midh").textContent = "Hunt — designated vehicle";
+  $("midsub").innerHTML = d.state === "done"
+    ? `${d.sightings.length} sighting(s) of the designated vehicle across
+       ${s.cameras_searched} camera(s), ${s.frames_examined} frames examined
+       in ${d.elapsed_s}s. Every tier below carries the reason it was given.`
+    : `<span class="spin"></span>${esc(d.stage)}
+       ${d.sightings.length} sighting(s) so far — the timeline fills in as
+       each camera finishes.`;
+  $("alarm").innerHTML = (d.legs || []).filter(l => l.impossible).map(l => `
+    <div class="banner">
+      <div class="hd">Impossible transit — ${esc(l.from)} to ${esc(l.to)}</div>
+      <div class="bd">${l.km} km in ${l.seconds}s implies
+        <b>${l.kmh} km/h</b>. ${esc(l.note)} Shown, not corrected.</div>
+    </div>`).join("");
+
+  state.sightings = d.sightings.map(x => ({...x, at:x.at_utc,
+                                           location_name:x.camera_name}));
+  state.legs = (d.legs || []).filter(l => !l.same_camera);
+  drawHuntTimeline(d);
+  drawHuntMap(d);
+}
+
+function drawProgress(d){
+  const running = d.state === "running" || d.state === "queued";
+  $("h-progress").style.display = "";
+  const rows = d.cameras.map(c => {
+    const pct = c.frames_total ? Math.round(100 * c.frames_done / c.frames_total) : 0;
+    const cls = c.state === "done" ? (c.sightings ? "hit" : "done") : "";
+    return `<div class="prow">
+      <div class="lbl"><span><b>${esc(c.camera_id)}</b> ${esc(c.location_name)}</span>
+        <em>${c.state === "done"
+             ? (c.sightings ? c.sightings + " found" : "clear")
+             : c.state === "searching" ? pct + "%" : "queued"}</em></div>
+      <div class="bar ${cls}"><i style="width:${pct}%"></i></div>
+      <div class="prog"><span>${c.frames_done}/${c.frames_total} frames ·
+        ${c.seconds_of_footage}s of footage</span>
+        <span>${c.seconds != null ? c.seconds + "s" : ""}</span></div>
+    </div>`;
+  }).join("");
+  const WORD = {queued:"queued", running:"running", done:"complete",
+                failed:"failed"};
+  $("h-progress").innerHTML = `
+    <div class="h">Hunt ${esc(WORD[d.state] || d.state)}</div>
+    <div class="stage">${running ? '<span class="spin"></span>' : ""}${esc(d.stage)}
+      ${d.error ? "<br>" + esc(d.error) : ""}</div>
+    ${rows}
+    <div class="aud">Query written to the tamper-evident log before the first
+      frame was opened.
+      <code>${esc((d.authorisation.entry_hash || "").slice(0, 32))}…</code>
+      ${d.authorisation.completion_hash ? `The outcome is chained after it.
+      <code>${esc(d.authorisation.completion_hash.slice(0, 32))}…</code>` : ""}
+    </div>`;
+}
+
+function drawHuntTimeline(d){
+  const target = d.target.image;
+  let html = d.sightings.map(s => {
+    const t = TIER[s.tier] || TIER.corroborating;
+    return `
+      <div class="evt ${s.tier}" data-seq="${s.seq}">
+        <div class="num">${s.seq}</div>
+        <div class="card">
+          <div class="when">+${s.offset_s ?? "?"} s<small>into the
+            ${esc(s.camera_id)} window · frame ${s.frame}</small></div>
+          <div class="where">${esc(s.camera_id)} · ${esc(s.camera_name)}</div>
+          <div class="where" style="color:var(--dim);font-size:11px">
+            ${esc(s.department || "—")} · ${CAP[s.capability_class] || "not measured"}
+            · ${s.plate_px_measured ?? "—"}px of plate measured</div>
+          <div class="pair">
+            <figure><img src="${esc(target)}" data-full="${esc(target)}"
+                         data-cap="The designated vehicle" alt="Designated vehicle">
+              <figcaption>Designated</figcaption></figure>
+            <figure><img src="${esc(s.crop_url || target)}"
+                         data-full="${esc(s.context_url || s.crop_url || target)}"
+                         data-cap="${esc(s.camera_id)} · ${esc(s.camera_name)} · frame ${s.frame}"
+                         alt="Vehicle seen on ${esc(s.camera_id)}">
+              <figcaption>Seen here</figcaption></figure>
+          </div>
+          <div class="eye">Confirm by eye — either picture opens the full frame.</div>
+          <div class="readline">
+            <span class="plate">${esc(s.vehicle_class || "vehicle")}</span>
+            <span class="chip">${t.label}</span>
+            <span class="conf">${s.score.toFixed(2)}</span>
+          </div>
+          <div class="caveat"><b>${esc(s.reason)}</b><br>
+            ${s.reasons.map(r => esc(r.text)).join("<br>")}</div>
+        </div>
+      </div>`;
+  }).join("");
+
+  const clear = (d.summary || {}).cameras_clear || [];
+  if(clear.length || d.state === "done"){
+    html += `<div class="clear">
+      <div class="hd">Searched and clear</div>
+      <div class="bd">${clear.length
+        ? `<b>${clear.map(esc).join(", ")}</b> — ${esc((d.summary||{}).clear_note)}`
+        : "Every camera searched produced at least one candidate."}</div>
+    </div>`;
+  }
+  $("timeline").innerHTML = html || `<div class="empty">Nothing found yet.
+    Cameras are opened one at a time.</div>`;
+  document.querySelectorAll(".evt").forEach(el =>
+    el.addEventListener("click", () => select(+el.dataset.seq, true)));
+  document.querySelectorAll(".pair img").forEach(el =>
+    el.addEventListener("click", e => {
+      e.stopPropagation();
+      $("veil-img").src = el.dataset.full;
+      $("veil-cap").innerHTML = `<b>${esc(el.dataset.cap)}</b>`;
+      $("veil").classList.add("show");
+    }));
+}
+
+function drawHuntMap(d){
+  $("legend").classList.add("show");
+  layer.clearLayers();
+  state.markers = {};
+
+  state.legs.forEach(l => {
+    if(l.from_lat == null || l.to_lat == null) return;
+    L.polyline([[l.from_lat,l.from_lon],[l.to_lat,l.to_lon]],
+      {color:"#0A0D12", weight:6, opacity:.55}).addTo(layer);
+    L.polyline([[l.from_lat,l.from_lon],[l.to_lat,l.to_lon]], l.impossible
+      ? {color:"#FF5C6E", weight:2.5, opacity:1, dashArray:"7 6"}
+      : {color:"#57E0C4", weight:2.5, opacity:.8}).addTo(layer);
+  });
+
+  // Every camera opened, whether or not it saw anything. The shape of where
+  // we looked is part of the finding.
+  d.cameras.forEach(c => {
+    if(c.lat == null) return;
+    L.marker([c.lat, c.lon], {icon: L.divIcon({className:"", iconSize:[16,16],
+      iconAnchor:[8,8],
+      html:`<div class="camnode ${esc(c.capability_class || "unknown")}"></div>`})})
+      .bindTooltip(`${c.camera_id} · ${c.location_name}<br>` +
+        `${c.state === "done" ? (c.sightings ? c.sightings + " sighting(s)" : "searched, clear")
+                              : c.state}`,
+        {direction:"top", offset:[0,-9]}).addTo(layer);
+  });
+
+  state.sightings.forEach(s => {
+    if(s.lat == null) return;
+    const m = L.marker([s.lat, s.lon], {icon: L.divIcon({
+      className:"", iconSize:[26,26], iconAnchor:[13,13],
+      html:`<div class="node ${s.tier}" data-seq="${s.seq}">${s.seq}</div>`})}).addTo(layer);
+    m.bindTooltip(`${s.camera_id} · ${s.camera_name}<br>` +
+      `${TIER[s.tier].label} · appearance ${s.score.toFixed(2)}`,
+      {direction:"top", offset:[0,-14]});
+    m.on("click", () => select(s.seq, false));
+    state.markers[s.seq] = m;
+  });
+
+  const pts = d.cameras.filter(c => c.lat != null).map(c => [c.lat, c.lon]);
+  if(pts.length) map.fitBounds(pts, {paddingTopLeft:[70,90],
+                                     paddingBottomRight:[430,70], maxZoom:13});
+}
+
+$("h-go").addEventListener("click", beginHunt);
+// Reconstructing from the record takes the screen back. A hunt still
+// polling underneath would redraw over it a second later.
+$("go").addEventListener("click", () => {
+  clearInterval(hunt.timer);
+  hunt.id = null;
+  $("h-dl").style.display = "none";
+});
+$("veil").addEventListener("click", () => $("veil").classList.remove("show"));
+$("h-target").addEventListener("click", () => {
+  $("veil-img").src = $("h-target").src;
+  $("veil-cap").innerHTML = `<b>The designated vehicle</b>`;
+  $("veil").classList.add("show");
+});
+$("h-dl").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(hunt.data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `hunt_${hunt.data.authorisation.case_ref.replace(/\W+/g,"_")}_`
+             + `${hunt.data.hunt_id}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// Both of these are deep links, so a supervisor can hand an officer a URL
+// rather than a set of instructions. A hunt started on one screen can be
+// followed on another -- useful when the search runs at a desk and is
+// watched on a wall.
+const url = new URLSearchParams(location.search);
+const attach = url.get("hunt");
+if(attach){
+  hunt.id = attach;
+  $("h-dl").style.display = "";
+  hunt.timer = setInterval(pollHunt, 1200);
+  pollHunt();
+}
+
+loadSources().then(() => {
+  const cam = url.get("designate");
+  const read = url.get("designation");
+  if(read){                       // a read already done, opened to pick from
+    hunt.picker.id = read;
+    $("picker").classList.add("show");
+    clearInterval(hunt.picker.timer);
+    hunt.picker.timer = setInterval(pollPicker, 1200);
+    pollPicker();
+  } else if(cam){                 // a camera to read now
+    $("p-cam").value = cam;
+    $("picker").classList.add("show");
+    $("p-go").click();
+  }
+});
+</script>
+</body>
+</html>

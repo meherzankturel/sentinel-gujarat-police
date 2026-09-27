@@ -1,0 +1,6 @@
+# Never publish footage, models or the working log from here.
+*.mp4
+*.mov
+*.pth
+.run/
+media/

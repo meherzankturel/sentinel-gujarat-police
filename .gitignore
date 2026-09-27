@@ -1,0 +1,43 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+audit/frames/
+audit/osd/
+audit/*.log
+media/*.mp4
+media/*.mov
+*.db
+.env
+
+# Self-signed cert mediamtx generates for the local mock grid on startup.
+# Nothing references it and it is regenerated on demand; a private key has
+# no business in a repository that is going to be published.
+auto.crt
+auto.key
+
+# Own-feed footage and its working images. Held out of history until the
+# public-repository question is settled: these are Meherzan's own vehicle
+# and members of the public on a street, and a decision to publish should
+# be made before the bytes are committed, not after.
+media/own/
+.run/own/
+
+# The hosted console's vendored copy of the light half of sentinel/.
+# tools/build_demo_site.py writes it before every deploy. Committing a
+# second copy of officer.py is how the deployment drifted from the real
+# endpoints in the first place; there is one source, and it is sentinel/.
+deploy/sentinel/
+
+# Playwright MCP session artefacts.
+.playwright-mcp/
+
+# Evidence stills, cut from footage that is not in this repository.
+#
+# tools/ingest_own_feed.py regenerates them, and the set includes crops of
+# a member of the public's car that happened to be parked in the entrant's
+# own street footage. Those rows are withheld from anything published;
+# keeping the images out of version control entirely means no future push,
+# fork or mirror can carry them by accident.
+web/assets/evidence/
+deploy/site/assets/evidence/

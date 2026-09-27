@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel — Camera capability registry</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231A1D23'/><circle cx='16' cy='16' r='7' fill='none' stroke='%230E9E83' stroke-width='3'/><circle cx='16' cy='16' r='2' fill='%230E9E83'/></svg>">
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Light console. The evaluators will see this on a laptop in daylight and
+     as screenshots inside a PDF, where a dark panel goes muddy; the control
+     room can have a dark build later. Warm neutrals rather than pure grey,
+     so the capability colours stay the only saturated thing on screen. */
+  --ink:#FAF9F6; --panel:#FFFFFF; --panel2:#F3F1EB; --line:#E4E1D9;
+  --bone:#1A1D23; --mist:#5C6672; --dim:#8A9098;
+  --veil:#FFFFFF;            /* backdrop behind things floating over the map */
+  --shadow:rgba(31,29,24,.14);
+
+  /* Capability is ordinal, not good/bad. A presence-only camera is not
+     "red" -- it is doing useful work. Darkened from the dark-theme ramp so
+     each one carries its weight against white. */
+  --cap-plate:#0E9E83;      /* reads plates            */
+  --cap-marginal:#B8780F;   /* partial reads           */
+  --cap-presence:#3E6E94;   /* counts and tracks       */
+  --cap-unusable:#8A5F6B;   /* not usable              */
+  --cap-novehicles:#6E6480; /* works, watches no road  */
+  --cap-unknown:#BDB8AE;    /* not yet measured        */
+
+  --sans:"Archivo",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--ink); color:var(--bone); font-family:var(--sans);
+  font-size:14px; line-height:1.45; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------------------------------------------------------- shell */
+.shell{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+.topbar{
+  display:flex;align-items:baseline;gap:18px;
+  padding:14px 20px;border-bottom:1px solid var(--line);
+  background:var(--panel);
+}
+.mark{
+  font-weight:700;font-size:15px;letter-spacing:.18em;text-transform:uppercase;
+}
+.mark span{color:var(--cap-plate)}
+.tagline{color:var(--mist);font-size:12.5px}
+.topbar .counts{margin-left:auto;display:flex;gap:22px}
+.counts b{font-family:var(--mono);font-size:15px;font-weight:600;display:block}
+.counts i{
+  font-style:normal;color:var(--dim);font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;
+}
+
+.body{display:grid;grid-template-columns:340px 1fr;min-height:0}
+
+/* --------------------------------------------------------- sidebar */
+.side{
+  background:var(--panel);border-right:1px solid var(--line);
+  overflow-y:auto;padding:18px 0 40px;
+}
+.block{padding:0 20px 22px}
+.block+.block{border-top:1px solid var(--line);padding-top:20px}
+.h{
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:4px;
+}
+.sub{color:var(--mist);font-size:12px;margin-bottom:14px}
+
+/* -------- signature: the capability spectrum -------- */
+.spectrum{position:relative;height:118px;margin-top:10px}
+.axis{
+  position:absolute;left:0;right:0;bottom:22px;height:1px;background:var(--line);
+}
+.thresh{position:absolute;bottom:22px;width:1px;height:74px;background:var(--dim)}
+.thresh::after{
+  content:attr(data-l);position:absolute;bottom:-19px;left:-14px;
+  font-family:var(--mono);font-size:9.5px;color:var(--dim);white-space:nowrap;
+}
+.band{
+  position:absolute;bottom:22px;height:74px;
+  background:linear-gradient(180deg,color-mix(in srgb, var(--cap-plate) 13%, transparent),color-mix(in srgb, var(--cap-plate) 2%, transparent));
+  border-left:1px solid color-mix(in srgb, var(--cap-plate) 35%, transparent);
+}
+.bandlabel{
+  position:absolute;top:0;font-size:10px;color:var(--cap-plate);
+  letter-spacing:.04em;padding-left:7px;
+}
+.dot{
+  position:absolute;bottom:22px;width:11px;height:11px;border-radius:50%;
+  box-shadow:0 0 0 2px var(--panel);
+  transform:translate(-50%,50%);cursor:pointer;
+  transition:transform .16s ease, box-shadow .16s ease;
+}
+.dot:hover,.dot.on{transform:translate(-50%,50%) scale(1.7);z-index:3}
+.scaleline{
+  position:absolute;left:0;right:0;bottom:4px;
+  display:flex;justify-content:space-between;
+  font-family:var(--mono);font-size:9.5px;color:var(--dim);
+}
+
+/* ---------------- legend ---------------- */
+.leg{display:flex;flex-direction:column;gap:9px}
+.leg div{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.sw{width:10px;height:10px;border-radius:50%;flex:none}
+.leg em{
+  margin-left:auto;font-style:normal;font-family:var(--mono);
+  font-size:12px;color:var(--mist);
+}
+
+/* ---------------- camera list ---------------- */
+.cam{
+  display:grid;grid-template-columns:10px 1fr auto;gap:10px;align-items:center;
+  padding:9px 20px;cursor:pointer;border-left:2px solid transparent;
+}
+.cam:hover{background:var(--panel2)}
+.cam.on{background:var(--panel2);border-left-color:var(--cap-plate)}
+.cam .nm{font-family:var(--mono);font-size:12.5px}
+.cam>div{min-width:0}
+.cam .lo{color:var(--dim);font-size:11px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cam .px{font-family:var(--mono);font-size:12px;color:var(--mist);
+  white-space:nowrap;justify-self:end}
+
+/* ------------------------------------------------------------ map */
+.mapwrap{position:relative;min-height:0}
+#map{position:absolute;inset:0;background:var(--ink)}
+.leaflet-container{background:var(--ink)}
+.leaflet-tile-pane{
+  /* Light tiles need no inversion. Desaturated a little so the
+     capability colours remain the brightest thing on the map. */
+  filter:saturate(.72) brightness(1.02) contrast(.96);
+}
+.leaflet-control-attribution{
+  background:color-mix(in srgb, var(--veil) 90%, transparent)!important;color:var(--dim)!important;
+  font-size:10px!important;
+}
+.leaflet-control-attribution a{color:var(--mist)!important}
+
+.pin{
+  border-radius:50%;
+  box-shadow:0 0 0 1px color-mix(in srgb, var(--veil) 90%, transparent), 0 2px 10px var(--shadow);
+  transition:transform .18s cubic-bezier(.2,.7,.3,1);
+}
+.pin.sensitive{outline:1px dashed color-mix(in srgb, var(--bone) 55%, transparent);outline-offset:3px}
+.pin.on{transform:scale(1.25)}
+
+/* --------------------------------------------------------- detail */
+.detail{
+  position:absolute;right:18px;bottom:18px;width:348px;z-index:600;
+  background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  padding:16px 18px 18px;box-shadow:0 18px 50px var(--shadow);
+  display:none;
+  /* The card answers for vehicles and for people now, which is more than
+     fits on a laptop beside a map. Bounded and scrolled rather than
+     allowed to run off the top of the screen. */
+  max-height:calc(100% - 36px);overflow-y:auto;overscroll-behavior:contain;
+}
+.detail::-webkit-scrollbar{width:8px}
+.detail::-webkit-scrollbar-thumb{background:var(--panel2);border-radius:4px}
+.detail.show{display:block}
+.detail h2{font-family:var(--mono);font-size:14px;font-weight:600;margin-bottom:2px}
+.detail .where{color:var(--mist);font-size:12px;margin-bottom:14px}
+.verdict{
+  display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:2px;
+  background:var(--panel2);margin-bottom:14px;font-size:12.5px;
+}
+.rows{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;font-size:12px}
+.rows dt{color:var(--dim)}
+.rows dd{font-family:var(--mono);text-align:right}
+/* The vehicle half of the card and the person half answer the same
+   question about the same camera, so they are one list with a rule
+   between them rather than two panels arguing separately. */
+.rows dt.sep{grid-column:1/-1;margin-top:9px;padding-top:9px;
+  border-top:1px solid var(--line);font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase}
+.rows dd.sep{display:none}
+.rows dd b{font-family:var(--mono);font-weight:600}
+.rows dd .dim{color:var(--dim);font-family:var(--sans);font-weight:400}
+.rows dd .dim b.warn{color:var(--cap-marginal);font-weight:600}
+.rows dd.dim{color:var(--dim);font-family:var(--sans)}
+.close{
+  position:absolute;top:12px;right:13px;color:var(--dim);cursor:pointer;
+  font-size:16px;line-height:1;background:none;border:0;
+}
+.close:hover{color:var(--bone)}
+.note{
+  margin-top:13px;padding-top:12px;border-top:1px solid var(--line);
+  color:var(--mist);font-size:11.5px;line-height:1.5;
+}
+:focus-visible{outline:2px solid var(--cap-plate);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* The registry stacks rather than dropping its sidebar. Hiding it left a
+   phone with a map of coloured dots and nothing to say what the colours
+   mean, which is the entire point of this screen. */
+@media (max-width:900px){
+  body{overflow:auto}
+  .shell{height:auto;min-height:100vh}
+  .topbar{flex-wrap:wrap;gap:9px 14px;padding:12px 14px}
+  .topbar .counts{margin-left:0;width:100%;gap:16px;flex-wrap:wrap}
+  .body{grid-template-columns:1fr}
+  /* Map above the list here: on this screen the map is the finding and
+     the list is the index to it. */
+  .mapwrap{height:58vh;order:-1}
+  .side{border-right:0;border-top:1px solid var(--line);overflow:visible}
+  .detail{left:14px;right:14px;width:auto}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="mark">Sentinel<span>.</span></div>
+    <div class="tagline">What each camera can actually do — measured, not assumed</div>
+    <a class="tagline" href="/officer" style="text-decoration:none;border-bottom:1px solid var(--line)">Officer's console →</a>
+    <div class="counts">
+      <div><b id="k-cams">—</b><i id="k-cams-note">cameras</i></div>
+      <div><b id="k-depts">—</b><i>departments</i></div>
+      <div><b id="k-anpr">—</b><i>assigned to plate reading</i></div>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="side">
+      <section class="block">
+        <div class="h">Capability spectrum</div>
+        <div class="sub">Measured plate width. Not resolution.</div>
+        <div class="spectrum" id="spectrum"></div>
+      </section>
+
+      <section class="block">
+        <div class="h">What the colour means</div>
+        <div class="sub">Ordered by what a camera can resolve.</div>
+        <div class="leg" id="legend"></div>
+      </section>
+
+      <section class="block" style="padding-left:0;padding-right:0">
+        <div class="h" style="padding:0 20px">Cameras</div>
+        <div class="sub" style="padding:0 20px">Sorted by measured plate width.</div>
+        <div id="camlist"></div>
+      </section>
+    </aside>
+
+    <div class="mapwrap">
+      <div id="map"></div>
+      <div class="detail" id="detail">
+        <button class="close" id="close" aria-label="Close">×</button>
+        <h2 id="d-id"></h2>
+        <div class="where" id="d-where"></div>
+        <div class="verdict"><span class="sw" id="d-sw"></span><span id="d-verdict"></span></div>
+        <dl class="rows" id="d-rows"></dl>
+        <div class="note" id="d-note"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/vendor/leaflet.js"></script>
+<script>
+// Human labels. The database calls these plate-capable / presence-only;
+// an officer should read what the camera does for them, not our schema.
+const CAP = {
+  "plate-capable":    {label:"Reads plates",      colour:"var(--cap-plate)",    rank:6},
+  "plate-occasional": {label:"Reads some plates", colour:"var(--cap-marginal)", rank:5},
+  "plate-marginal":   {label:"Partial reads",     colour:"var(--cap-marginal)", rank:4},
+  "presence-only":    {label:"Counts and tracks", colour:"var(--cap-presence)", rank:3},
+  // Not a fault. The camera works; it is pointed somewhere vehicles do not
+  // go. Seven of the thirty government cameras are like this, and a
+  // platform that assumes every camera watches a road wastes them.
+  "no-vehicles-observed": {label:"No vehicles seen", colour:"var(--cap-novehicles)", rank:2},
+  "unusable":         {label:"Not usable",        colour:"var(--cap-unusable)", rank:1},
+  "unknown":          {label:"Not yet measured",  colour:"var(--cap-unknown)",  rank:0},
+};
+const ANALYTIC = {
+  anpr:"Plate reading", anpr_low:"Plate reading (corroborating only)",
+  presence:"Presence detection", none:"None", probe:"Awaiting measurement",
+};
+
+// What the same camera can do about people.
+//
+// The registry has always answered this for vehicles: measured plate
+// width decides whether plate reading is scheduled. People need their own
+// axis, and it is not resolution either — it is how many pixels fall
+// between a person's eyes at the distance this camera actually watches.
+// Below the floor a recogniser does not fail quietly. It returns a name.
+const FACE_FLOOR_PX = 40;      // the floor for even attempting a match
+const FACE_ENROL_PX = 60;      // ISO/IEC 19794-5 enrolment floor
+const HAND_FLOOR_PX = 8;       // below this a hand is not in the image
+const POSTURE_FLOOR_PX = 160;  // body pixels needed before limb angles mean anything
+
+const FACE = {
+  "face-capable":  {label:"Face matching available", colour:"var(--cap-plate)"},
+  "face-marginal": {label:"Face matching marginal",  colour:"var(--cap-marginal)"},
+  "face-unusable": {label:"No face matching here",   colour:"var(--cap-unusable)"},
+};
+
+// A hand is about 10cm across on a 170cm body; the rest is arithmetic.
+const handPx = bodyPx => bodyPx * 0.06;
+
+function peopleRows(c){
+  if(c.face_iod_px == null)
+    return `<dt>People</dt><dd class="dim">Not yet measured on this camera</dd>`;
+
+  const iod = c.face_iod_px, body = c.person_body_px;
+  const hand = handPx(body || 0);
+  const shortBy = (FACE_FLOOR_PX / Math.max(iod, 0.01)).toFixed(1);
+  const f = FACE[c.face_class] || FACE["face-unusable"];
+  return `
+    <dt>Between the eyes</dt>
+    <dd><b>${iod.toFixed(1)} px</b> <span class="dim">· ${FACE_FLOOR_PX}px needed
+      to attempt, ${FACE_ENROL_PX}px to enrol — short by ${shortBy}×</span></dd>
+    <dt>Face matching</dt><dd style="color:${f.colour}">${f.label}</dd>
+    <dt>Body height</dt>
+    <dd>${body ? body.toFixed(0) + " px" : "—"}
+      <span class="dim">· from ${c.face_people_seen} people measured</span></dd>
+    <dt>Threat posture</dt>
+    <dd>${body >= POSTURE_FLOOR_PX ? "Gate open" : "Gate closed"}
+      <span class="dim">· ${body.toFixed(0)}px of body against a
+      ${POSTURE_FLOOR_PX}px floor; limb angles are noise below it.
+      <b class="warn">Not validated</b> — no real footage of the behaviour
+      exists, so the layer is not run.</span></dd>
+    <dt>Weapon in hand</dt>
+    <dd>${hand >= HAND_FLOOR_PX ? "Gate open" : "Gate closed"}
+      <span class="dim">· a hand here is ${hand.toFixed(1)}px against a
+      ${HAND_FLOOR_PX}px floor${hand >= HAND_FLOOR_PX ? "" :
+        " — a 20cm blade is under 2px and is not in the image"}.
+      <b class="warn">Not validated</b> — not enabled on any camera.</span></dd>
+    <dt>Crowd dispersal</dt>
+    <dd>Available <span class="dim">· reads the crowd's motion field, so it
+      needs neither a face nor a weapon. False alarms measured on real
+      government footage, day and night; detection measured on simulated
+      crowds only.</span></dd>`;
+}
+const cap = c => CAP[c] || CAP.unknown;
+const SPECTRUM_MAX = 220;
+
+let cams = [], markers = {}, selected = null, map;
+
+function initMap(){
+  map = L.map("map",{zoomControl:false,attributionControl:true})
+         .setView([23.15,72.60],11);
+  L.control.zoom({position:"bottomleft"}).addTo(map);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{
+    attribution:'© OpenStreetMap contributors', maxZoom:19,
+  }).addTo(map);
+}
+
+// Marker area carries measured plate width, so resolving power becomes
+// visual weight. Two 1080p cameras can look very different here, which is
+// the entire point.
+function radiusFor(px){
+  if(!px) return 7;
+  return Math.max(7, Math.min(26, 6 + Math.sqrt(px) * 1.35));
+}
+
+function drawMarkers(){
+  cams.forEach((c,i) => {
+    if(c.lat == null || c.lon == null) return;
+    const r = radiusFor(c.plate_px_measured);
+    const sensitive = c.governance_class === "sensitive";
+    const icon = L.divIcon({
+      className:"", iconSize:[r*2,r*2], iconAnchor:[r,r],
+      html:`<div class="pin${sensitive?" sensitive":""}" data-cam="${c.id}"
+              style="width:${r*2}px;height:${r*2}px;
+                     background:${cap(c.capability_class).colour};
+                     opacity:0;"></div>`,
+    });
+    const m = L.marker([c.lat,c.lon],{icon}).addTo(map);
+    m.on("click",()=>select(c.id));
+    markers[c.id] = m;
+
+    // Reveal largest-first: the map resolves itself from the cameras that
+    // can see most down to the ones that can barely see at all.
+    const el = m.getElement()?.querySelector(".pin");
+    if(el){
+      const reduce = matchMedia("(prefers-reduced-motion:reduce)").matches;
+      setTimeout(()=>{ el.style.transition="opacity .5s ease"; el.style.opacity="1"; },
+                 reduce ? 0 : 90*i);
+    }
+  });
+}
+
+function drawSpectrum(){
+  const box = document.getElementById("spectrum");
+  const pct = px => Math.min(100, (px/SPECTRUM_MAX)*100);
+  let html = `<div class="band" style="left:${pct(120)}%;right:0"></div>
+              <div class="bandlabel" style="left:${pct(120)}%">plates readable</div>
+              <div class="axis"></div>
+              <div class="thresh" style="left:${pct(80)}%" data-l="80px"></div>
+              <div class="thresh" style="left:${pct(120)}%" data-l="120px"></div>`;
+  const placed = [];
+  [...cams].sort((a,b)=>(a.plate_px_measured||0)-(b.plate_px_measured||0)).forEach(c => {
+    const px = c.plate_px_measured;
+    if(!px) return;
+    const x = pct(px);
+    // Lift a dot above its neighbour rather than let the two merge into one.
+    let lift = 0;
+    while(placed.some(p => Math.abs(p.x-x) < 4.5 && p.lift === lift)) lift += 14;
+    placed.push({x,lift});
+    html += `<div class="dot" data-cam="${c.id}" title="${c.id} · ${px}px"
+               style="left:${x}%;bottom:${22+lift}px;
+                      background:${cap(c.capability_class).colour}"></div>`;
+  });
+  html += `<div class="scaleline"><span>0</span><span>${SPECTRUM_MAX}px plate width</span></div>`;
+  box.innerHTML = html;
+  box.querySelectorAll(".dot").forEach(d =>
+    d.addEventListener("click",()=>select(d.dataset.cam)));
+}
+
+function drawLegend(){
+  const counts = {};
+  cams.forEach(c => counts[c.capability_class] = (counts[c.capability_class]||0)+1);
+  document.getElementById("legend").innerHTML =
+    Object.entries(CAP)
+      .sort((a,b)=>b[1].rank-a[1].rank)
+      .filter(([k])=>counts[k])
+      .map(([k,v])=>`<div><span class="sw" style="background:${v.colour}"></span>
+                       ${v.label}<em>${counts[k]}</em></div>`).join("");
+}
+
+function drawList(){
+  document.getElementById("camlist").innerHTML = cams.map(c=>`
+    <div class="cam" data-cam="${c.id}">
+      <span class="sw" style="background:${cap(c.capability_class).colour}"></span>
+      <div><div class="nm">${c.id}</div>
+           <div class="lo">${c.department} · ${c.location_name||""}</div></div>
+      <span class="px">${c.plate_px_measured ? c.plate_px_measured+"px" : "—"}</span>
+    </div>`).join("");
+  document.querySelectorAll(".cam").forEach(el =>
+    el.addEventListener("click",()=>select(el.dataset.cam)));
+}
+
+function select(id){
+  selected = id;
+  const c = cams.find(x=>x.id===id);
+  if(!c) return;
+
+  document.querySelectorAll(".cam").forEach(e=>e.classList.toggle("on",e.dataset.cam===id));
+  document.querySelectorAll(".dot").forEach(e=>e.classList.toggle("on",e.dataset.cam===id));
+  document.querySelectorAll(".pin").forEach(e=>e.classList.toggle("on",e.dataset.cam===id));
+
+  const k = cap(c.capability_class);
+  document.getElementById("d-id").textContent = c.id;
+  document.getElementById("d-where").textContent =
+    `${c.department} · ${c.location_name||"location not recorded"}`;
+  document.getElementById("d-sw").style.background = k.colour;
+  document.getElementById("d-verdict").textContent = k.label;
+
+  const drift = c.time_confidence_ms;
+  const driftTxt = drift == null ? "not measured"
+    : (Math.abs(drift) < 1000 ? "within 1s"
+       : (drift/1000).toFixed(1).replace(/^(?!-)/,"+") + "s");
+
+  document.getElementById("d-rows").innerHTML = `
+    <dt>Plate width</dt><dd>${c.plate_px_measured ? c.plate_px_measured+" px" : "—"}</dd>
+    <dt>Measured by</dt><dd>${c.capability_basis || "—"}</dd>
+    <dt>Sensor</dt><dd>${c.width}×${c.height} ${c.codec||""}</dd>
+    <dt>Clock drift</dt><dd>${driftTxt}</dd>
+    <dt>Running</dt><dd>${ANALYTIC[c.analytic]||c.analytic}</dd>
+    <dt>Handling</dt><dd>${c.governance_class}</dd>
+    <dt class="sep">For people</dt><dd class="sep"></dd>
+    ${peopleRows(c)}`;
+
+  const note = [];
+  if(c.plate_px_measured && c.plate_px_measured < 120 && c.height >= 1080)
+    note.push(`Full ${c.height}p and still cannot read a plate — the camera sits too far back. Resolution would have told you the opposite.`);
+  if(drift != null && Math.abs(drift) > 30000)
+    note.push(`This camera's own clock is ${(drift/1000/60).toFixed(1)} minutes out. Its sightings are corrected before they reach a timeline.`);
+  if(c.face_iod_px != null && c.face_class === "face-unusable")
+    note.push(`Facial recognition is assigned by the same control plane that assigns plate reading — and it assigns none to this camera. At ${c.face_iod_px.toFixed(1)}px between the eyes there is no face present, only a smudge that resembles one.`);
+  if(c.governance_class === "sensitive")
+    note.push(`Health department footage. Patient confidentiality applies on top of ordinary privacy duty, so access is case-linked and logged.`);
+  document.getElementById("d-note").textContent = note.join(" ");
+  document.getElementById("d-note").style.display = note.length ? "" : "none";
+  document.getElementById("detail").classList.add("show");
+}
+
+document.getElementById("close").addEventListener("click",()=>{
+  document.getElementById("detail").classList.remove("show");
+  document.querySelectorAll(".cam,.dot,.pin").forEach(e=>e.classList.remove("on"));
+});
+
+async function boot(){
+  initMap();
+  const [reg, asn] = await Promise.all([
+    fetch("/api/cameras").then(r=>r.json()),
+    fetch("/api/assignments").then(r=>r.json()),
+  ]);
+  cams = reg.cameras.sort((a,b)=>(b.plate_px_measured||0)-(a.plate_px_measured||0));
+
+  // Three sources are federated here and the split is always shown. A
+  // single total would overstate the government footprint -- which it did:
+  // the own-feed cameras carry no stream URL, the old rule inferred the
+  // grid from that URL and defaulted to "government", and the header read
+  // 33 where there are 30.
+  const g = reg.by_grid || {};
+  const parts = [
+    [g.government, "government"],
+    [g["local-mock"], "local mock"],
+    [g["own-feed"], "own feed"],
+    [g.unclassified, "unclassified"],
+  ].filter(([n]) => n).map(([n, label]) => `${n} ${label}`);
+  document.getElementById("k-cams").textContent = cams.length;
+  document.getElementById("k-cams-note").textContent = parts.join(" · ");
+  document.getElementById("k-depts").textContent =
+    new Set(cams.map(c=>c.department)).size;
+  document.getElementById("k-anpr").textContent =
+    `${asn.summary.running_anpr} of ${asn.summary.cameras}`;
+
+  drawLegend(); drawSpectrum(); drawList(); drawMarkers();
+
+  const pts = cams.filter(c=>c.lat!=null).map(c=>[c.lat,c.lon]);
+  if(pts.length) map.fitBounds(pts,{padding:[70,70]});
+
+  // Deep link: /#cam-04 opens that camera. Useful for walking a panel
+  // straight to the camera that makes the point.
+  const want = location.hash.replace("#","");
+  if(want && cams.some(c=>c.id===want)) select(want);
+  addEventListener("hashchange",()=>{
+    const h = location.hash.replace("#","");
+    if(h && cams.some(c=>c.id===h)) select(h);
+  });
+}
+boot();
+</script>
+</body>
+</html>

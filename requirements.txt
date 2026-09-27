@@ -1,0 +1,27 @@
+# Sentinel — Gujarat Police Hackathon 2026
+# Python 3.12. Permissively licensed throughout: no AGPL in this stack,
+# which in a state procurement is a blocker rather than a footnote.
+#
+#   python -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+
+opencv-python==4.12.0.88
+numpy==2.2.6
+torch==2.14.0
+torchvision==0.29.0
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.5
+cryptography==50.0.1
+pillow==12.3.0
+pytest==9.1.1
+python-pptx==1.0.2
+
+# FastAPI does not pin starlette, and starlette 1.7 moved its TestClient
+# to httpx2. A clean install without these two pins fails at *collection*
+# -- before a single test runs -- which is a confusing first impression for
+# anyone cloning this. Found by installing into an empty environment rather
+# than trusting the one it was developed in.
+starlette==1.6.0
+httpx==0.28.1
+python-multipart==0.0.32

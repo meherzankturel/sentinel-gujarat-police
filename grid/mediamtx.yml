@@ -1,0 +1,32 @@
+# Local stand-in for the Sentinel gateway.
+# Ports chosen to match the documented endpoints exactly:
+#   rtsp://<host>:8554/stream/<id>
+#   http://<host>:8889/stream/<id>/whep
+#   http://<host>:8888/stream/<id>/index.m3u8
+
+logLevel: info
+logDestinations: [stdout]
+
+api: yes
+apiAddress: 127.0.0.1:9997
+
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp, udp]
+
+webrtc: yes
+webrtcAddress: :8889
+
+hls: yes
+hlsAddress: :8888
+hlsVariant: lowLatency
+hlsAlwaysRemux: no
+
+rtmp: no
+srt: no
+
+pathDefaults:
+  source: publisher
+
+paths:
+  all_others:

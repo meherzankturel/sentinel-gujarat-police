@@ -1,0 +1,717 @@
+{
+  "grid": {
+    "surveyed": 30,
+    "total": 30,
+    "failed": 0,
+    "by_capability": {
+      "presence-only": 18,
+      "plate-occasional": 2,
+      "no-vehicles-observed": 7,
+      "plate-capable": 3
+    },
+    "plate_capable": 3,
+    "plate_capable_share": 0.1,
+    "one_in": 10.0,
+    "median_plate_px": 27.4,
+    "best_plate_px": 473.2,
+    "median_yield": 0.0,
+    "read_threshold_px": 120,
+    "cameras": [
+      {
+        "id": "cam18",
+        "name": "18 Rajkot CCTV",
+        "res": "1920x1080",
+        "plate_p50": 47.6,
+        "plate_p90": 271.6,
+        "yield": 0.2165,
+        "capability": "plate-capable",
+        "vehicles": 194,
+        "ptz": false
+      },
+      {
+        "id": "cam17",
+        "name": "17 Rajkot Bus Port CCTV",
+        "res": "1920x1080",
+        "plate_p50": 104.4,
+        "plate_p90": 201.0,
+        "yield": 0.312,
+        "capability": "plate-capable",
+        "vehicles": 250,
+        "ptz": false
+      },
+      {
+        "id": "cam09",
+        "name": "09 new-bypass-near-by-circle-junagadh-2",
+        "res": "1920x1080",
+        "plate_p50": 127.1,
+        "plate_p90": 192.6,
+        "yield": 0.5455,
+        "capability": "plate-capable",
+        "vehicles": 44,
+        "ptz": false
+      },
+      {
+        "id": "cam05",
+        "name": "05 Visat teen Rasta",
+        "res": "1920x1080",
+        "plate_p50": 58.8,
+        "plate_p90": 89.0,
+        "yield": 0.0278,
+        "capability": "plate-occasional",
+        "vehicles": 216,
+        "ptz": false
+      },
+      {
+        "id": "cam15",
+        "name": "15 Suvidha park",
+        "res": "1920x1080",
+        "plate_p50": 33.9,
+        "plate_p90": 86.0,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 11,
+        "ptz": false
+      },
+      {
+        "id": "cam13",
+        "name": "13 CN Vidhyalaya",
+        "res": "1920x1080",
+        "plate_p50": 28.8,
+        "plate_p90": 79.8,
+        "yield": 0.0118,
+        "capability": "presence-only",
+        "vehicles": 169,
+        "ptz": false
+      },
+      {
+        "id": "cam12",
+        "name": "12 Tri Mandir Adalaj Tollnaka",
+        "res": "1280x720",
+        "plate_p50": 28.0,
+        "plate_p90": 68.3,
+        "yield": 0.0541,
+        "capability": "plate-occasional",
+        "vehicles": 37,
+        "ptz": false
+      },
+      {
+        "id": "cam22",
+        "name": "28 BK Mervada tran Rasta",
+        "res": "854x480",
+        "plate_p50": 37.8,
+        "plate_p90": 63.3,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 24,
+        "ptz": false
+      },
+      {
+        "id": "cam02",
+        "name": "02 Janpath",
+        "res": "1920x1080",
+        "plate_p50": 30.8,
+        "plate_p90": 62.7,
+        "yield": 0.0163,
+        "capability": "presence-only",
+        "vehicles": 245,
+        "ptz": false
+      },
+      {
+        "id": "cam03",
+        "name": "03 O.N.G.C. Office",
+        "res": "1280x720",
+        "plate_p50": 22.7,
+        "plate_p90": 57.1,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 36,
+        "ptz": false
+      },
+      {
+        "id": "cam01",
+        "name": "01 Chiman bhai Bridge",
+        "res": "1920x1080",
+        "plate_p50": 27.4,
+        "plate_p90": 56.0,
+        "yield": 0.0173,
+        "capability": "presence-only",
+        "vehicles": 463,
+        "ptz": false
+      },
+      {
+        "id": "cam29",
+        "name": "38 bilimora",
+        "res": "1280x960",
+        "plate_p50": 44.5,
+        "plate_p90": 47.6,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 8,
+        "ptz": false
+      },
+      {
+        "id": "cam30",
+        "name": "Gandhidham Rambaugh p2",
+        "res": "1920x1080",
+        "plate_p50": 18.2,
+        "plate_p90": 47.3,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 14,
+        "ptz": false
+      },
+      {
+        "id": "cam14",
+        "name": "14 Delight RLVD",
+        "res": "1920x1080",
+        "plate_p50": 20.4,
+        "plate_p90": 45.4,
+        "yield": 0.0063,
+        "capability": "presence-only",
+        "vehicles": 159,
+        "ptz": false
+      },
+      {
+        "id": "cam21",
+        "name": "23 Patan Dethali Char Rasta",
+        "res": "854x480",
+        "plate_p50": 24.4,
+        "plate_p90": 38.1,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 183,
+        "ptz": false
+      },
+      {
+        "id": "cam11",
+        "name": "11 dolatpara-junagadh",
+        "res": "854x480",
+        "plate_p50": 20.4,
+        "plate_p90": 33.9,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 332,
+        "ptz": false
+      },
+      {
+        "id": "cam26",
+        "name": "35 TANKAL",
+        "res": "854x480",
+        "plate_p50": 32.2,
+        "plate_p90": 32.2,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 1,
+        "ptz": false
+      },
+      {
+        "id": "cam08",
+        "name": "08 majewadi-gate-junagadh",
+        "res": "854x480",
+        "plate_p50": 9.0,
+        "plate_p90": 26.3,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 328,
+        "ptz": false
+      },
+      {
+        "id": "cam10",
+        "name": "10 char-chowk-road-2-junagadh",
+        "res": "854x480",
+        "plate_p50": 12.9,
+        "plate_p90": 24.9,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 371,
+        "ptz": false
+      },
+      {
+        "id": "cam24",
+        "name": "33 dehgam",
+        "res": "960x576",
+        "plate_p50": 23.0,
+        "plate_p90": 23.0,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 1,
+        "ptz": false
+      },
+      {
+        "id": "cam16",
+        "name": "16 Visat P2",
+        "res": "1920x1080",
+        "plate_p50": 16.2,
+        "plate_p90": 21.6,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 161,
+        "ptz": false
+      },
+      {
+        "id": "cam04",
+        "name": "04 Paldi Circle",
+        "res": "854x480",
+        "plate_p50": 12.9,
+        "plate_p90": 19.6,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 383,
+        "ptz": false
+      },
+      {
+        "id": "cam07",
+        "name": "07 hero-showroom-gir-somnath",
+        "res": "854x480",
+        "plate_p50": 7.0,
+        "plate_p90": 10.9,
+        "yield": 0.0,
+        "capability": "presence-only",
+        "vehicles": 23,
+        "ptz": false
+      },
+      {
+        "id": "cam06",
+        "name": "06 Timbavadi gate-Junagadh",
+        "res": "854x480",
+        "plate_p50": null,
+        "plate_p90": null,
+        "yield": null,
+        "capability": "no-vehicles-observed",
+        "vehicles": 0,
+        "ptz": false
+      },
+      {
+        "id": "cam19",
+        "name": "19 KHAPARIA GRAM PANCHAYAT , TALUKA GANDEVI, DISTRICT NAVSARI",
+        "res": "854x480",
+        "plate_p50": null,
+        "plate_p90": null,
+        "yield": null,
+        "capability": "no-vehicles-observed",
+        "vehicles": 0,
+        "ptz": false
+      },
+      {
+        "id": "cam20",
+        "name": "20 Mohanpura",
+        "res": "854x480",
+        "plate_p50": null,
+        "plate_p90": null,
+        "yield": null,
+        "capability": "no-vehicles-observed",
+        "vehicles": 0,
+        "ptz": false
+      },
+      {
+        "id": "cam23",
+        "name": "30 kheram",
+        "res": "854x480",
+        "plate_p50": null,
+        "plate_p90": null,
+        "yield": null,
+        "capability": "no-vehicles-observed",
+        "vehicles": 0,
+        "ptz": false
+      },
+      {
+        "id": "cam25",
+        "name": "34 dhanori",
+        "res": "640x480",
+        "plate_p50": null,
+        "plate_p90": null,
+        "yield": null,
+        "capability": "no-vehicles-observed",
+        "vehicles": 0,
+        "ptz": false
+      },
+      {
+        "id": "cam27",
+        "name": "36 bilimora",
+        "res": "1280x960",
+        "plate_p50": null,
+        "plate_p90": null,
+        "yield": null,
+        "capability": "no-vehicles-observed",
+        "vehicles": 0,
+        "ptz": false
+      },
+      {
+        "id": "cam28",
+        "name": "37 bilimora",
+        "res": "1280x960",
+        "plate_p50": null,
+        "plate_p90": null,
+        "yield": null,
+        "capability": "no-vehicles-observed",
+        "vehicles": 0,
+        "ptz": false
+      }
+    ]
+  },
+  "validation": {
+    "n": 8,
+    "worst_err_pct": 2.6,
+    "mean_err_pct": 1.02,
+    "rows": [
+      {
+        "id": "cam-01",
+        "res": "1920x1080",
+        "measured": 179,
+        "true": 180,
+        "err_pct": -0.6,
+        "cls": "plate-capable",
+        "basis": "direct plate localisation",
+        "hits": 85,
+        "expect": "plate-capable"
+      },
+      {
+        "id": "cam-02",
+        "res": "1280x720",
+        "measured": 121,
+        "true": 122,
+        "err_pct": -0.8,
+        "cls": "plate-capable",
+        "basis": "direct plate localisation",
+        "hits": 50,
+        "expect": "plate-capable (marginal)"
+      },
+      {
+        "id": "cam-03",
+        "res": "640x480",
+        "measured": 37,
+        "true": 38,
+        "err_pct": -2.6,
+        "cls": "presence-only",
+        "basis": "direct plate localisation",
+        "hits": 78,
+        "expect": "presence-only"
+      },
+      {
+        "id": "cam-04",
+        "res": "1920x1080",
+        "measured": 44,
+        "true": 44,
+        "err_pct": 0.0,
+        "cls": "presence-only",
+        "basis": "direct plate localisation",
+        "hits": 131,
+        "expect": "presence-only DESPITE 1080p -- mounted too far back"
+      },
+      {
+        "id": "cam-05",
+        "res": "1280x720",
+        "measured": 95,
+        "true": 96,
+        "err_pct": -1.0,
+        "cls": "plate-marginal",
+        "basis": "direct plate localisation",
+        "hits": 50,
+        "expect": "night / degraded -- presence, weak plate"
+      },
+      {
+        "id": "cam-06",
+        "res": "1920x1080",
+        "measured": 151,
+        "true": 152,
+        "err_pct": -0.7,
+        "cls": "plate-capable",
+        "basis": "direct plate localisation",
+        "hits": 141,
+        "expect": "plate-capable, H.265 -- mixed-codec test"
+      },
+      {
+        "id": "cam-07",
+        "res": "704x576",
+        "measured": 63,
+        "true": 62,
+        "err_pct": 1.6,
+        "cls": "presence-only",
+        "basis": "direct plate localisation",
+        "hits": 117,
+        "expect": "legacy D1, soft optics -- presence-only"
+      },
+      {
+        "id": "cam-08",
+        "res": "1280x720",
+        "measured": 111,
+        "true": 112,
+        "err_pct": -0.9,
+        "cls": "plate-marginal",
+        "basis": "direct plate localisation",
+        "hits": 53,
+        "expect": "plate-capable BUT clock +7m08s wrong AND governance=sensitive"
+      }
+    ]
+  },
+  "clocks": {
+    "n": 8,
+    "trusted": 6,
+    "max_abs_drift_s": 428.5
+  },
+  "registry": {
+    "cameras": 41,
+    "government": 30,
+    "own_feed": 3,
+    "local_mock": 8,
+    "unclassified": 0,
+    "departments": 4,
+    "departments_all": 6,
+    "sightings": 16,
+    "alerts": 5,
+    "audit_entries": 162
+  },
+  "scaling": {
+    "state_cameras": 80000,
+    "heavy_share": 0.1,
+    "heavy_cameras": 8000,
+    "saved_cameras": 72000,
+    "gpus_all": 1600,
+    "gpus_assigned": 160,
+    "mbps_per_camera": "2-5",
+    "gbps_all": "160-400",
+    "gb_per_camera_day": 43,
+    "pb_per_day": 3.4,
+    "pb_30_day": 103.0
+  },
+  "faces": {
+    "n": 4,
+    "floor_px": 40.0,
+    "best_iod": 9.8,
+    "worst_iod": 2.7,
+    "best_short_by": 4.1,
+    "worst_short_by": 14.8,
+    "people_measured": 1737,
+    "capable": 0,
+    "rows": [
+      {
+        "id": "cam09",
+        "people": 139,
+        "body_p90": 370.0,
+        "iod": 9.8,
+        "short_by": 4.1
+      },
+      {
+        "id": "cam16",
+        "people": 310,
+        "body_p90": 166.0,
+        "iod": 4.4,
+        "short_by": 9.1
+      },
+      {
+        "id": "cam05",
+        "people": 343,
+        "body_p90": 113.0,
+        "iod": 3.0,
+        "short_by": 13.3
+      },
+      {
+        "id": "cam01",
+        "people": 945,
+        "body_p90": 101.0,
+        "iod": 2.7,
+        "short_by": 14.8
+      }
+    ]
+  },
+  "upgrades": {
+    "total": 30,
+    "met": 3,
+    "optics": 8,
+    "resite": 8,
+    "replace": 4,
+    "not_applicable": 7,
+    "after_capable": 11,
+    "gain": 8,
+    "best_factor": 1.35,
+    "worst_factor": 2.14,
+    "share_before": 0.1,
+    "share_after": 0.3667,
+    "rows": [
+      {
+        "id": "cam05",
+        "where": "Visat Teen Rasta, Ahmedabad",
+        "dept": "Police",
+        "have": 89.0,
+        "factor": 1.35,
+        "lens": "1.4x the focal length, same mounting point"
+      },
+      {
+        "id": "cam15",
+        "where": "Suvidha Park, Ahmedabad",
+        "dept": "Municipal",
+        "have": 86.0,
+        "factor": 1.4,
+        "lens": "1.4x the focal length, same mounting point"
+      },
+      {
+        "id": "cam13",
+        "where": "CN Vidhyalaya, Ahmedabad",
+        "dept": "Municipal",
+        "have": 79.0,
+        "factor": 1.52,
+        "lens": "1.6x the focal length, same mounting point"
+      },
+      {
+        "id": "cam12",
+        "where": "Tri Mandir Adalaj Tollnaka",
+        "dept": "GSRTC",
+        "have": 68.0,
+        "factor": 1.76,
+        "lens": "1.8x the focal length, same mounting point"
+      },
+      {
+        "id": "cam22",
+        "where": "BK Mervada Tran Rasta",
+        "dept": "Panchayat",
+        "have": 63.0,
+        "factor": 1.9,
+        "lens": "2x the focal length, same mounting point"
+      },
+      {
+        "id": "cam02",
+        "where": "Janpath, Ahmedabad",
+        "dept": "Police",
+        "have": 62.0,
+        "factor": 1.94,
+        "lens": "2x the focal length, same mounting point"
+      },
+      {
+        "id": "cam03",
+        "where": "O.N.G.C. Office, Ahmedabad",
+        "dept": "Police",
+        "have": 57.0,
+        "factor": 2.11,
+        "lens": "2.2x the focal length, same mounting point"
+      },
+      {
+        "id": "cam01",
+        "where": "Chimanbhai Bridge, Ahmedabad",
+        "dept": "Police",
+        "have": 56.0,
+        "factor": 2.14,
+        "lens": "2.2x the focal length, same mounting point"
+      }
+    ]
+  },
+  "lookahead": {
+    "watch": [
+      {
+        "camera_id": "cam16",
+        "name": "Visat P2, Ahmedabad",
+        "department": "Police",
+        "capability": "presence-only",
+        "km": 0.15,
+        "bearing": 43,
+        "off_course": 33,
+        "eta_s": 10,
+        "score": 0.479,
+        "why": [
+          "33\u00b0 off the direction of travel",
+          "0.15 km away, about 0.2 min at 53 km/h",
+          "presence-only: can corroborate the route, never confirm it"
+        ]
+      }
+    ],
+    "heading": 10,
+    "speed_kmh": 52.7,
+    "speed_basis": "measured between cam01 and cam05",
+    "from_camera": "cam05",
+    "horizon_s": 600,
+    "budget": 4,
+    "considered": 28,
+    "note": "All 1 reachable camera(s) fit inside the budget.",
+    "ring": {
+      "watch": [
+        {
+          "camera_id": "cam16",
+          "name": "Visat P2, Ahmedabad",
+          "department": "Police",
+          "capability": "presence-only",
+          "km": 0.15,
+          "bearing": 43,
+          "off_course": 0,
+          "eta_s": 16,
+          "score": 0.577,
+          "why": [
+            "no heading yet, so every direction is in play",
+            "0.15 km away, about 0.3 min at 35 km/h",
+            "presence-only: can corroborate the route, never confirm it"
+          ]
+        },
+        {
+          "camera_id": "cam15",
+          "name": "Suvidha Park, Ahmedabad",
+          "department": "Municipal",
+          "capability": "presence-only",
+          "km": 3.63,
+          "bearing": 162,
+          "off_course": 0,
+          "eta_s": 373,
+          "score": 0.332,
+          "why": [
+            "no heading yet, so every direction is in play",
+            "3.63 km away, about 6.2 min at 35 km/h",
+            "presence-only: can corroborate the route, never confirm it"
+          ]
+        },
+        {
+          "camera_id": "cam14",
+          "name": "Delight RLVD, Ahmedabad",
+          "department": "Police",
+          "capability": "presence-only",
+          "km": 4.56,
+          "bearing": 179,
+          "off_course": 0,
+          "eta_s": 469,
+          "score": 0.266,
+          "why": [
+            "no heading yet, so every direction is in play",
+            "4.56 km away, about 7.8 min at 35 km/h",
+            "presence-only: can corroborate the route, never confirm it"
+          ]
+        },
+        {
+          "camera_id": "cam20",
+          "name": "Mohanpura",
+          "department": "Panchayat",
+          "capability": "no-vehicles-observed",
+          "km": 3.04,
+          "bearing": 220,
+          "off_course": 0,
+          "eta_s": 313,
+          "score": 0.216,
+          "why": [
+            "no heading yet, so every direction is in play",
+            "3.04 km away, about 5.2 min at 35 km/h",
+            "no vehicles seen here when surveyed; watched only if nothing better"
+          ]
+        }
+      ],
+      "heading": null,
+      "speed_kmh": 35.0,
+      "speed_basis": "no second sighting; urban default",
+      "from_camera": "cam05",
+      "horizon_s": 600,
+      "budget": 4,
+      "considered": 29,
+      "note": "2 further camera(s) are reachable but outside the budget of 4 open streams."
+    },
+    "cameras_in_registry": 30,
+    "hand_picked": "cam16",
+    "hand_picked_rank": 1
+  },
+  "costs": {
+    "gpu_node_lakh": 20,
+    "capital_all_cr": 320,
+    "capital_assigned_cr": 32,
+    "difference_cr": 288,
+    "ratio": 10.0,
+    "power_all_cr_year": 7.8,
+    "power_assigned_cr_year": 0.8,
+    "hot_hours": 72,
+    "hot_pb": 10.3,
+    "hot_storage_cr": 12.4,
+    "metadata_tb_year": 1
+  }
+}
